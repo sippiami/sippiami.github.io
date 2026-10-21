@@ -560,7 +560,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.10.19';
+var VERSI_TAMPILAN='2026.10.21';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -2258,7 +2258,7 @@ function loadObsLog(){
   call('getLogObservasi',S.token,st.sv.survei_id,rid,tgl).then(function(list){
     if(!list||!list.length){el.innerHTML='<div class="empty"><h3>Belum ada observasi</h3><p>Untuk ruangan &amp; tanggal ini.</p></div>';return;}
     var F=st.sv.fields;
-    var simbol=function(o,f){var v=o.nilai[f.field_id],neg=(f.opsi&&f.opsi[1])||'Tidak Patuh';
+    var simbol=function(o,f){var v=(o.nilai||{})[f.field_id],neg=(f.opsi&&f.opsi[1])||'Tidak Patuh';
       if(!v)return '<td class="otb-n na" title="N/A">–</td>';
       return v===neg?'<td class="otb-n tidak" title="'+esc(v)+'">✗</td>':'<td class="otb-n ya" title="'+esc(v)+'">✓</td>';};
     el.innerHTML='<div class="card card-pad"><h3 class="mb">Observasi hari ini ('+list.length+')</h3>'+
@@ -2985,7 +2985,12 @@ function unduhBase64(b64,nama){
   var bin=atob(b64), arr=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
   var url=URL.createObjectURL(new Blob([arr],{type:'application/pdf'}));
   var a=document.createElement('a'); a.href=url; a.download=nama; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(function(){URL.revokeObjectURL(url);},60000);
+  // iPhone/iPad (terutama dari ikon layar utama) sering mengabaikan unduhan otomatis -> sediakan tombol buka/unduh manual.
+  if(/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)){
+    modal('PDF siap','<p class="small">Bila PDF belum terbuka otomatis, ketuk tombol di bawah. Di iPhone, PDF terbuka di tab baru — ketuk ikon Bagikan lalu <b>Simpan ke File</b>.</p>'+
+      '<p><a class="btn" href="'+url+'" target="_blank" download="'+esc(nama)+'">Buka / Unduh PDF</a></p>');
+    setTimeout(function(){URL.revokeObjectURL(url);},600000);
+  } else setTimeout(function(){URL.revokeObjectURL(url);},60000);
 }
 
 
@@ -3113,6 +3118,7 @@ function hitungPerProfesi(r){
 }
 function _persen(a,b){return b?Math.round(a/b*1000)/10+'%':'-';}
 function htmlPerProfesi(r,kode){
+  if(!r.fields||!r.rincian)return '<div class="card card-pad mb"><h3>Kepatuhan per Profesi</h3>'+PESAN_SERVER_LAMA+'</div>';
   var P=hitungPerProfesi(r), F=r.fields||[], satuan=kode==='HH'?'momen':'item';
   if(!P.list.length)return '<div class="card card-pad mb"><h3>Kepatuhan per Profesi</h3><div class="desc">Belum ada observasi pada bulan ini.</div></div>';
   var semua=P.list.concat([P.total]);
@@ -3130,6 +3136,7 @@ function htmlPerProfesi(r,kode){
     '<div class="otb-ket-bawah">'+(kode==='HH'?'Momen':'Item')+': '+F.map(function(f,i){return (i+1)+'. '+esc(f.label);}).join(' · ')+'</div></div>';
 }
 function kontenPerProfesi(r,kode,huruf){
+  if(!r.fields||!r.fields.length||!r.rincian)return [fJudul(huruf,'Kepatuhan per Profesi'),fCatatan('Belum tersedia — Kode.gs di server perlu diperbarui.')];
   var P=hitungPerProfesi(r), F=r.fields||[], satuan=kode==='HH'?'Momen':'Item', k=[fJudul(huruf,'Kepatuhan per Profesi')];
   var semua=P.list.length?P.list.concat([P.total]):[];
   k.push(fTabel(['No','Profesi','Observasi','Observasi Patuh','Peluang Dinilai','Patuh','Tidak Patuh','% Kepatuhan'],
@@ -3146,8 +3153,10 @@ function kontenPerProfesi(r,kode,huruf){
   return k;
 }
 /* ===== Lampiran Laporan Bulanan HH/APD: rincian tiap observasi per petugas ===== */
-function _nilaiObs(o,f){var v=o.nilai[f.field_id],neg=(f.opsi&&f.opsi[1])||'Tidak Patuh';return !v?'na':(v===neg?'tidak':'ya');}
+function _nilaiObs(o,f){var v=(o.nilai||{})[f.field_id],neg=(f.opsi&&f.opsi[1])||'Tidak Patuh';return !v?'na':(v===neg?'tidak':'ya');}
+var PESAN_SERVER_LAMA='<div class="badge warn" style="display:block;padding:10px 12px;white-space:normal">Bagian ini memerlukan Kode.gs terbaru. Pasang Kode.gs terbaru di Apps Script, lalu Kelola deployment → Versi baru.</div>';
 function htmlLampiranObservasi(r,kode){
+  if(!r.fields||!r.rincian)return '<div class="card card-pad mb"><h3>Lampiran — Rincian Observasi per Petugas</h3>'+PESAN_SERVER_LAMA+'</div>';
   var F=r.fields||[], R=r.rincian||[], adaKeg=R.some(function(o){return o.kegiatan;}), satuan=kode==='HH'?'Momen':'Item';
   var sim={ya:'<td class="otb-n ya">✓</td>',tidak:'<td class="otb-n tidak">✗</td>',na:'<td class="otb-n na">–</td>'};
   return '<div class="card card-pad mb"><h3>Lampiran — Rincian Observasi per Petugas</h3>'+
@@ -3166,6 +3175,7 @@ function htmlLampiranObservasi(r,kode){
     :'<div class="desc">Belum ada observasi pada bulan ini.</div>')+'</div>';
 }
 function kontenLampiranObservasi(r,kode){
+  if(!r.fields||!r.fields.length||!r.rincian)return [];   // Kode.gs lama: lampiran dilewati agar PDF tetap jadi
   var F=r.fields||[], R=r.rincian||[], adaKeg=R.some(function(o){return o.kegiatan;}), n=F.length;
   var k=[fJudul('','LAMPIRAN — Rincian Observasi per Petugas','landscape'),
     fCatatan(R.length+' observasi · '+r.namaBulan+' '+r.tahun+(kode==='HH'?' · Kepatuhan Kebersihan Tangan':' · Kepatuhan Penggunaan APD'))];
@@ -3411,7 +3421,10 @@ function ppiPDF(opts){
         footer:function(cur,total){return {columns:[{text:dicetak,fontSize:7,color:'#666'},{text:'Halaman '+cur+' dari '+total,fontSize:7,color:'#666',alignment:'right'}],margin:[36,10,36,0]};},
         info:{title:opts.judul||'Laporan SIPPI AMI',author:'SIPPI AMI — RSUD Aji Muhammad Idris'}};
       var nama=(opts.namaFile||opts.judul||'Laporan SIPPI AMI').replace(/[\\\/:*?"<>|]+/g,'-')+'.pdf';
-      return new Promise(function(ok){pdfMake.createPdf(dd).getBase64(function(b64){ok({b64:b64,nama:nama});});});
+      return new Promise(function(ok,gagal){
+        try{pdfMake.createPdf(dd).getBase64(function(b64){ok({b64:b64,nama:nama});});}
+        catch(e){gagal(new Error('Isi laporan tidak dapat disusun ('+((e&&e.message)||e)+')'));}
+      });
     }).then(function(h){
       unduhBase64(h.b64,h.nama);
       toast('PDF diunduh ✓','ok');
