@@ -512,6 +512,39 @@
   .kamera-jepret{width:74px;height:74px;border-radius:50%;border:4px solid #fff;background:transparent;padding:4px;cursor:pointer;flex:none}
   .kamera-jepret span{display:block;width:100%;height:100%;border-radius:50%;background:#fff}
   .kamera-jepret:active span{transform:scale(.9)}.kamera-jepret:disabled{opacity:.35}
+  .obs-log{display:flex;flex-direction:column;gap:12px}
+  .ol-kartu{border:1px solid #e3e8ec;border-left:4px solid var(--ok,#2e8b57);border-radius:12px;padding:12px 14px;background:#fff}
+  .ol-kartu.tidak{border-left-color:var(--danger,#c0392b)}
+  .ol-kepala{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+  .ol-kepala b{font-size:15px}.ol-kanan{display:flex;gap:8px;align-items:center}
+  .ol-ringkas{color:#5b6b78;margin:6px 0 8px}
+  .ol-daftar{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px}
+  .ol-item{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;background:#f6f8fa;font-size:13px}
+  .ol-no{width:20px;height:20px;border-radius:50%;background:#e3ebf2;color:var(--blue);font-weight:700;font-size:11px;display:grid;place-items:center}
+  .ol-nilai{font-weight:700;font-size:12px;padding:2px 8px;border-radius:12px;white-space:nowrap}
+  .ol-item.ya .ol-nilai{background:#e7f4e0;color:#3d7a14}.ol-item.tidak{background:#fdf1ef}.ol-item.tidak .ol-nilai{background:#f9d9d3;color:#b0331f}
+  .ol-item.na{opacity:.7}.ol-item.na .ol-nilai{background:#e8ecef;color:#6b7a86}
+  .ol-catatan{margin-top:8px;font-size:13px;background:#fffaf0;border-radius:8px;padding:8px 10px}
+  .ol-foto{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .ol-foto img{width:96px;height:96px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid #e3e8ec}
+  .ol-foto-muat{width:96px;height:96px;border-radius:8px;background:linear-gradient(90deg,#eef2f5,#f7f9fb,#eef2f5);background-size:200% 100%;animation:olMuat 1.2s infinite}
+  .ol-foto-muat.gagal{animation:none}@keyframes olMuat{to{background-position:-200% 0}}
+  @media(max-width:640px){.ol-foto img,.ol-foto-muat{width:80px;height:80px}.ol-daftar{grid-template-columns:1fr}}
+  .otb{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+  .otb th,.otb td{border:1px solid #d5dde3;padding:6px 8px;vertical-align:middle;text-align:left}
+  .otb thead th{background:#E2EFDA;font-weight:700;font-size:12px;color:#1d2b36}
+  .otb .otb-c{text-align:center;white-space:nowrap}
+  .otb .otb-n{text-align:center;width:30px;font-weight:700;font-size:14px}
+  .otb td.ya{color:#2f7a12}.otb td.tidak{color:#b0331f;background:#fdf1ef}.otb td.na{color:#9aa6b0}
+  .otb tbody tr:nth-child(even) td{background-color:#fafbfc}.otb tbody tr:nth-child(even) td.tidak{background:#fdf1ef}
+  .otb-status{font-weight:700;font-size:12px}.otb-status.ya{color:#2f7a12}.otb-status.tidak{color:#b0331f}
+  .otb-ket{min-width:160px;max-width:260px}
+  .otb-foto{display:flex;gap:4px;flex-wrap:nowrap}
+  .otb-foto img{width:44px;height:44px;object-fit:cover;border-radius:4px;border:1px solid #d5dde3;cursor:zoom-in}
+  .otb-foto .ol-foto-muat{width:44px;height:44px}
+  .otb-ket-bawah{margin-top:10px;font-size:12px;color:#5b6b78}.otb-ket-bawah ol{margin:4px 0 0 18px;padding:0;columns:2;column-gap:24px}
+  @media(max-width:640px){.otb-ket-bawah ol{columns:1}}
+  .otb tr.otb-jml td{background:#f2f4f6;font-weight:700}
 </style>
   <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -2039,6 +2072,7 @@ function renderLaporanObservasi(area,r,kode){
     '<div class="card card-pad mb"><h3>Diagram Batang — Kepatuhan per '+(kode==='HH'?'Momen':'Item')+' ('+esc(r.namaBulan)+' '+r.tahun+')</h3>'+
       '<canvas id="lpChartObs" height="140"></canvas></div>'+
     '<div class="card card-pad mb"><div class="desc mb">Rincian angka (sumber diagram di atas):</div>'+barisChart+'</div>'+
+    htmlPerProfesi(r,kode)+
     '<div class="card card-pad mb"><h3>Form A — Sensus Harian Indikator Mutu</h3>'+
       '<div class="desc mb">'+esc(judul)+' &middot; '+esc(r.namaBulan)+' '+r.tahun+' &middot; Area: Semua Unit Pelayanan</div>'+
       '<div class="table-scroll"><table class="tabel-harian"><thead><tr><th>Ruang</th><th class="num">Total</th><th class="num">Peluang</th><th class="num">Hasil Capaian</th></tr></thead>'+
@@ -2060,13 +2094,14 @@ function renderLaporanObservasi(area,r,kode){
       '<div class="row"><button class="btn teal" id="fbSimpan">Simpan Form B</button>'+
       '<button class="btn" id="obsPdf">Unduh PDF</button></div></div>';
 
+  area.insertAdjacentHTML('beforeend',htmlLampiranObservasi(r,kode));
   var labels=r.itemChart.map(function(x){return labelSingkat(x.label);});
   var data=r.itemChart.map(function(x){return x.persen===null?0:x.persen;});
   buatChart($('#lpChartObs').getContext('2d'),{type:'bar',data:{labels:labels,datasets:[{label:'Kepatuhan (%)',data:data,backgroundColor:'#0F6E56',borderRadius:4,maxBarThickness:40}]},
     options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}},grid:{color:'#E4ECEA'}},x:{grid:{display:false}}}}});
 
   $('#obsPdf').onclick=function(){
-    ppiPDF({konten:kontenLaporanObservasi(r,kode),judul:'Laporan '+judul,sub:'Bulan '+r.namaBulan+' '+r.tahun+' · Semua Unit Pelayanan',orientasi:'portrait',
+    ppiPDF({konten:kontenLaporanObservasi(r,kode),lampiran:kontenLampiranObservasi(r,kode),judul:'Laporan '+judul,sub:'Bulan '+r.namaBulan+' '+r.tahun+' · Semua Unit Pelayanan',orientasi:'portrait',
       namaFile:'Laporan '+judul+' '+r.namaBulan+' '+r.tahun});
   };
   $('#fbSimpan').onclick=function(){
@@ -2100,7 +2135,7 @@ function renderObsStep1(area){
     '<div><label>Kegiatan</label><select id="obsKegiatan">'+sv.kegiatan.map(function(k){return '<option value="'+esc(k)+'"'+(id.kegiatanPilih===k?' selected':'')+'>'+esc(k)+'</option>';}).join('')+'</select></div>'+
     '<div id="obsKegiatanLainWrap" style="display:none"><label>Kegiatan lainnya</label><input id="obsKegiatanLain" placeholder="Tulis kegiatan"></div>'
     :'';
-  var profesi=['Perawat','Dokter','Bidan','Lainnya'];
+  var profesi=DAFTAR_PROFESI, profLain=id.profesi&&profesi.indexOf(id.profesi)<0;
   var item=sv.fields.map(function(f,i){
     var o=f.opsi&&f.opsi.length===2?f.opsi:['Patuh','Tidak Patuh'];
     return '<div class="obs-item" data-f="'+f.field_id+'">'+
@@ -2119,7 +2154,8 @@ function renderObsStep1(area){
         '<div><label>Tanggal</label><input type="date" id="obsTgl" value="'+(id.tanggal||todayISO())+'" max="'+todayISO()+'"></div>'+
         '<div><label>Ruangan</label><select id="obsRuang">'+st.ruangan.map(function(r){return '<option value="'+r.ruangan_id+'"'+(id.ruangan_id===r.ruangan_id?' selected':'')+'>'+esc(r.nama)+'</option>';}).join('')+'</select></div>'+
         '<div><label>Nama petugas</label><input id="obsNama" placeholder="Nama petugas yang diobservasi"></div>'+
-        '<div><label>Profesi</label><select id="obsProfesi">'+profesi.map(function(p){return '<option'+(id.profesi===p?' selected':'')+'>'+p+'</option>';}).join('')+'</select></div>'+
+        '<div><label>Profesi</label><select id="obsProfesi">'+profesi.map(function(p){return '<option'+((id.profesi===p||(profLain&&p==='Lainnya'))?' selected':'')+'>'+p+'</option>';}).join('')+'</select></div>'+
+        '<div id="obsProfesiLainWrap"'+(profLain?'':' style="display:none"')+'><label>Profesi lainnya</label><input id="obsProfesiLain" placeholder="Tulis profesi, mis. Perekam medis" value="'+(profLain?esc(id.profesi):'')+'"></div>'+
         kegiatanHTML+
       '</div></div>'+
     '<div class="card card-pad mb">'+
@@ -2142,6 +2178,7 @@ function renderObsStep1(area){
   if(sv.kegiatan){
     $('#obsKegiatan').onchange=function(){$('#obsKegiatanLainWrap').style.display=(this.value==='Lainnya')?'block':'none';};
   }
+  $('#obsProfesi').onchange=function(){$('#obsProfesiLainWrap').style.display=(this.value==='Lainnya')?'block':'none';if(this.value==='Lainnya')$('#obsProfesiLain').focus();};
   function pilih(row,v){
     st.jawaban[row.dataset.f]=v;
     $all('button',row).forEach(function(b){b.classList.toggle('on',b.dataset.v===v);});
@@ -2195,7 +2232,10 @@ function renderObsStep1(area){
     if(!jawaban.length){toast('Minimal satu '+(st.kode==='HH'?'momen':'item')+' harus dinilai (bukan N/A semua).','err');return;}
     if(!st.foto.length){toast('Bukti foto wajib dilampirkan (minimal 1 foto).','err');$('#obsFotoGrid').scrollIntoView({behavior:'smooth',block:'center'});$('#obsFotoGrid').classList.add('belum');return;}
     var kegPilih=sv.kegiatan?$('#obsKegiatan').value:'';
-    st.identitas={tanggal:$('#obsTgl').value, ruangan_id:$('#obsRuang').value, profesi:$('#obsProfesi').value, kegiatanPilih:kegPilih};
+    var prof=$('#obsProfesi').value;
+    if(prof==='Lainnya'){var pl=$('#obsProfesiLain').value.trim();if(!pl){toast('Tulis profesi petugas pada kolom "Profesi lainnya".','err');$('#obsProfesiLain').focus();return;}
+      prof=pl.toLowerCase().replace(/(^|\s)\S/g,function(c){return c.toUpperCase();});}
+    st.identitas={tanggal:$('#obsTgl').value, ruangan_id:$('#obsRuang').value, profesi:prof, kegiatanPilih:kegPilih};
     var payload={
       survei_id:sv.survei_id, ruangan_id:st.identitas.ruangan_id, tanggal:st.identitas.tanggal,
       nama_petugas:$('#obsNama').value.trim(), profesi:st.identitas.profesi,
@@ -2203,7 +2243,7 @@ function renderObsStep1(area){
       jawaban:jawaban, catatan:$('#obsCatatan').value.trim(), foto:st.foto.slice()
     };
     btn.disabled=true; btn.textContent='Mengunggah foto & menyimpan…';
-    call('simpanObservasi',S.token,payload).then(function(r){
+    Promise.all(payload.foto.map(buatThumb)).then(function(t){payload.thumb=t.filter(Boolean);return call('simpanObservasi',S.token,payload);}).then(function(r){
       if(r&&r.ok){toast('Observasi '+payload.nama_petugas+' tersimpan ✓ ('+r.kepatuhan+')','ok'); renderObsStep1(area); window.scrollTo(0,0); $('#obsNama').focus();}
       else {btn.disabled=false;btn.textContent='Simpan observasi';toast((r&&r.pesan)||'Gagal menyimpan.','err');}
     }).catch(function(e){btn.disabled=false;btn.textContent='Simpan observasi';toast('Gagal: '+((e&&e.message)||e),'err');});
@@ -2214,22 +2254,56 @@ function renderObsStep1(area){
 function loadObsLog(){
   var st=OBS_STATE, tgl=$('#obsTgl')?$('#obsTgl').value:todayISO(), rid=$('#obsRuang')?$('#obsRuang').value:'';
   var el=$('#obsLogArea'); if(!el)return; el.innerHTML='<div class="spinner"></div>';
+  var satuan=st.kode==='HH'?'momen':'item';
   call('getLogObservasi',S.token,st.sv.survei_id,rid,tgl).then(function(list){
     if(!list||!list.length){el.innerHTML='<div class="empty"><h3>Belum ada observasi</h3><p>Untuk ruangan &amp; tanggal ini.</p></div>';return;}
+    var F=st.sv.fields;
+    var simbol=function(o,f){var v=o.nilai[f.field_id],neg=(f.opsi&&f.opsi[1])||'Tidak Patuh';
+      if(!v)return '<td class="otb-n na" title="N/A">–</td>';
+      return v===neg?'<td class="otb-n tidak" title="'+esc(v)+'">✗</td>':'<td class="otb-n ya" title="'+esc(v)+'">✓</td>';};
     el.innerHTML='<div class="card card-pad"><h3 class="mb">Observasi hari ini ('+list.length+')</h3>'+
-      '<div class="table-scroll"><table class="tabel-harian"><thead><tr><th>Petugas</th><th>Profesi</th>'+
-      (st.sv.kegiatan?'<th>Kegiatan</th>':'')+'<th>Observer</th><th>Kepatuhan</th><th>Foto</th><th></th></tr></thead><tbody>'+
-      list.map(function(o){
-        return '<tr><td>'+esc(o.nama_petugas)+'</td><td>'+esc(o.profesi)+'</td>'+
-          (st.sv.kegiatan?'<td>'+esc(o.kegiatan)+'</td>':'')+
-          '<td class="small muted">'+esc(o.observer_nama)+'</td>'+
-          '<td><span class="badge '+(o.kepatuhan==='Patuh'?'ok':'danger')+'">'+esc(o.kepatuhan)+'</span></td>'+
-          '<td>'+(o.jumlah_foto?'<button class="btn ghost sm" onclick="lihatFotoObs(\''+o.entry_id+'\')">'+IKON_KAMERA+' '+o.jumlah_foto+'</button>':'<span class="small muted">-</span>')+'</td>'+
-          '<td><button class="btn ghost sm" onclick="hapusBarisObs(\''+o.entry_id+'\')">Hapus</button></td></tr>';
-      }).join('')+'</tbody></table></div></div>';
+      '<div class="table-scroll"><table class="otb"><thead><tr>'+
+        '<th rowspan="2" class="otb-c">No</th><th rowspan="2" class="otb-c">Jam</th><th rowspan="2">Nama Petugas</th><th rowspan="2">Profesi</th>'+
+        (st.sv.kegiatan?'<th rowspan="2">Kegiatan</th>':'')+
+        '<th colspan="'+F.length+'" class="otb-c">'+(st.kode==='HH'?'Momen':'Item')+'</th>'+
+        '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(st.kode==='APD'?'Temuan':'Keterangan')+'</th><th rowspan="2">Foto</th><th rowspan="2" class="otb-c">Aksi</th></tr>'+
+        '<tr>'+F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
+      list.map(function(o,n){
+        return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td><td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi||'-')+'</td>'+
+          (st.sv.kegiatan?'<td>'+esc(o.kegiatan||'-')+'</td>':'')+
+          F.map(function(f){return simbol(o,f);}).join('')+
+          '<td class="otb-c"><span class="otb-status '+(o.kepatuhan==='Patuh'?'ya':'tidak')+'">'+esc(o.kepatuhan)+'</span></td>'+
+          '<td class="otb-ket">'+(o.catatan?esc(o.catatan):'<span class="muted">-</span>')+'</td>'+
+          '<td><div class="otb-foto" id="olf_'+o.entry_id+'">'+
+            (o.jumlah_foto?(o.thumb||[]).map(function(d,i){return '<img src="'+d+'" alt="Foto '+(i+1)+'" onclick="lihatFotoObs(\''+o.entry_id+'\')">';}).join('')+
+              (o.thumb_kurang?Array(Math.max(0,o.jumlah_foto-(o.thumb||[]).length)).fill('<span class="ol-foto-muat"></span>').join(''):'')
+            :'<span class="muted">-</span>')+'</div></td>'+
+          '<td class="otb-c"><button class="btn ghost sm" onclick="hapusBarisObs(\''+o.entry_id+'\')">Hapus</button></td></tr>';
+      }).join('')+'</tbody></table></div>'+
+      '<div class="otb-ket-bawah"><b>Keterangan:</b> ✓ = Patuh · ✗ = Tidak patuh · – = Tidak dinilai (N/A). Ketuk foto untuk memperbesar.<ol>'+
+        F.map(function(f){return '<li>'+esc(f.label)+'</li>';}).join('')+'</ol></div></div>';
+    // foto lama yang belum punya gambar kecil -> buatkan dari Drive
+    var kurang=list.filter(function(o){return o.thumb_kurang;}).map(function(o){return o.entry_id;});
+    if(kurang.length)call('getThumbObservasi',S.token,kurang).then(function(h){
+      Object.keys(h||{}).forEach(function(id){var box=$('#olf_'+id);if(!box)return;
+        box.innerHTML=(h[id]||[]).map(function(d,i){return '<img src="'+d+'" alt="Foto '+(i+1)+'" onclick="lihatFotoObs(\''+id+'\')">';}).join('')||'<span class="small muted">Foto tidak ditemukan</span>';});
+    }).catch(function(){$all('.ol-foto-muat').forEach(function(x){x.classList.add('gagal');});});
+  });
+}
+/* Gambar kecil (±200 px) dari foto, disimpan bersama observasi agar tabel bisa langsung menampilkan foto. */
+function buatThumb(dataUrl){
+  return new Promise(function(ok){
+    var img=new Image();
+    img.onload=function(){var r=Math.min(1,200/Math.max(img.naturalWidth,img.naturalHeight));
+      var cv=document.createElement('canvas');cv.width=Math.round(img.naturalWidth*r);cv.height=Math.round(img.naturalHeight*r);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);ok(cv.toDataURL('image/jpeg',0.65));};
+    img.onerror=function(){ok('');};img.src=dataUrl;
   });
 }
 var MAKS_FOTO=5;
+/* Pilihan profesi petugas yang diobservasi (Survei HH & APD). "Lainnya" -> diketik sendiri. */
+var DAFTAR_PROFESI=['Dokter Spesialis','Dokter Umum','Dokter Gigi','Perawat','Bidan','Analis Laboratorium (ATLM)','Radiografer',
+  'Apoteker / Tenaga Teknis Kefarmasian','Ahli Gizi','Fisioterapis','Petugas Kebersihan','Peserta Didik / Mahasiswa','Lainnya'];
 var IKON_KAMERA='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
 var IKON_GALERI='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
 /* Perkecil foto (maks 1280 px, JPEG) agar cepat diunggah dari HP. */
@@ -2925,7 +2999,7 @@ function fGaris(){return {hLineWidth:function(){return .5;},vLineWidth:function(
    o: {kiri:[idx kolom rata kiri], widths, tebal:fn(row)->bool, kosong:'teks'} */
 function fTabel(head,rows,o){
   o=o||{};
-  var hRows=Array.isArray(head[0])?head:[head], n=hRows[0].reduce(function(a,c){return a+((c&&c.colSpan)||1);},0);
+  var hRows=Array.isArray(head[0])?head:[head], n=hRows[0].length;   // tiap baris header sudah memuat sel pengisi untuk colSpan
   var body=hRows.map(function(hr){return hr.map(function(h){
     if(h&&typeof h==='object')return 'text' in h?Object.assign({bold:true,fillColor:F_HIJAU,alignment:'center'},h):{};
     return {text:String(h),bold:true,fillColor:F_HIJAU,alignment:'center'};});});
@@ -3021,17 +3095,110 @@ function kontenLaporanBulanan(r){
 }
 
 /* ===== Laporan Observasi HH / APD ===== */
+/* ===== Kepatuhan per profesi (dihitung dari rincian observasi bulan itu) ===== */
+function hitungPerProfesi(r){
+  var F=r.fields||[], peta={}, URUT=DAFTAR_PROFESI;
+  (r.rincian||[]).forEach(function(o){
+    var p=o.profesi||'Lainnya', d=peta[p]=peta[p]||{profesi:p,obs:0,obsPatuh:0,dinilai:0,patuh:0,item:{}};
+    d.obs++; if(o.kepatuhan==='Patuh')d.obsPatuh++;
+    F.forEach(function(f){var s=_nilaiObs(o,f); if(s==='na')return;
+      var it=d.item[f.field_id]=d.item[f.field_id]||{dinilai:0,patuh:0}; it.dinilai++; d.dinilai++; if(s==='ya'){it.patuh++;d.patuh++;}});
+  });
+  var list=Object.keys(peta).map(function(k){return peta[k];});
+  list.sort(function(a,b){var ia=URUT.indexOf(a.profesi),ib=URUT.indexOf(b.profesi);return (ia<0?9:ia)-(ib<0?9:ib)||a.profesi.localeCompare(b.profesi);});
+  var tot={profesi:'JUMLAH',obs:0,obsPatuh:0,dinilai:0,patuh:0,item:{}};
+  list.forEach(function(d){tot.obs+=d.obs;tot.obsPatuh+=d.obsPatuh;tot.dinilai+=d.dinilai;tot.patuh+=d.patuh;
+    Object.keys(d.item).forEach(function(k){var t=tot.item[k]=tot.item[k]||{dinilai:0,patuh:0};t.dinilai+=d.item[k].dinilai;t.patuh+=d.item[k].patuh;});});
+  return {list:list,total:tot};
+}
+function _persen(a,b){return b?Math.round(a/b*1000)/10+'%':'-';}
+function htmlPerProfesi(r,kode){
+  var P=hitungPerProfesi(r), F=r.fields||[], satuan=kode==='HH'?'momen':'item';
+  if(!P.list.length)return '<div class="card card-pad mb"><h3>Kepatuhan per Profesi</h3><div class="desc">Belum ada observasi pada bulan ini.</div></div>';
+  var semua=P.list.concat([P.total]);
+  var t1='<table class="otb"><thead><tr><th class="otb-c">No</th><th>Profesi</th><th class="otb-c">Observasi</th><th class="otb-c">Observasi Patuh</th>'+
+    '<th class="otb-c">Peluang Dinilai</th><th class="otb-c">Patuh</th><th class="otb-c">Tidak Patuh</th><th class="otb-c">% Kepatuhan</th></tr></thead><tbody>'+
+    semua.map(function(d,i){var tb=d===P.total;return '<tr'+(tb?' class="otb-jml"':'')+'><td class="otb-c">'+(tb?'':i+1)+'</td><td><b>'+esc(d.profesi)+'</b></td><td class="otb-c">'+d.obs+'</td><td class="otb-c">'+d.obsPatuh+'</td>'+
+      '<td class="otb-c">'+d.dinilai+'</td><td class="otb-c">'+d.patuh+'</td><td class="otb-c">'+(d.dinilai-d.patuh)+'</td><td class="otb-c"><b>'+_persen(d.patuh,d.dinilai)+'</b></td></tr>';}).join('')+'</tbody></table>';
+  var t2='<table class="otb"><thead><tr><th rowspan="2">Profesi</th><th colspan="'+F.length+'" class="otb-c">% Kepatuhan per '+satuan+'</th></tr><tr>'+
+    F.map(function(f,i){return '<th class="otb-c" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
+    semua.map(function(d){var tb=d===P.total;return '<tr'+(tb?' class="otb-jml"':'')+'><td><b>'+esc(d.profesi)+'</b></td>'+F.map(function(f){var it=d.item[f.field_id];
+      return '<td class="otb-c">'+(it?_persen(it.patuh,it.dinilai)+'<div class="small muted">'+it.patuh+'/'+it.dinilai+'</div>':'<span class="muted">-</span>')+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table>';
+  return '<div class="card card-pad mb"><h3>Kepatuhan per Profesi</h3>'+
+    '<div class="desc mb">Peluang dinilai = jumlah '+satuan+' yang dinilai (tanpa N/A). % kepatuhan = patuh ÷ peluang dinilai.</div>'+
+    '<div class="table-scroll">'+t1+'</div><h3 class="mt mb small">Rincian per '+satuan+'</h3><div class="table-scroll">'+t2+'</div>'+
+    '<div class="otb-ket-bawah">'+(kode==='HH'?'Momen':'Item')+': '+F.map(function(f,i){return (i+1)+'. '+esc(f.label);}).join(' · ')+'</div></div>';
+}
+function kontenPerProfesi(r,kode,huruf){
+  var P=hitungPerProfesi(r), F=r.fields||[], satuan=kode==='HH'?'Momen':'Item', k=[fJudul(huruf,'Kepatuhan per Profesi')];
+  var semua=P.list.length?P.list.concat([P.total]):[];
+  k.push(fTabel(['No','Profesi','Observasi','Observasi Patuh','Peluang Dinilai','Patuh','Tidak Patuh','% Kepatuhan'],
+    semua.map(function(d,i){return [d===P.total?'':i+1,d.profesi,d.obs,d.obsPatuh,d.dinilai,d.patuh,d.dinilai-d.patuh,_persen(d.patuh,d.dinilai)];}),
+    {kiri:[1],tebal:function(x){return x[1]==='JUMLAH';},widths:[20,'*',46,52,52,40,46,56],kosong:'Belum ada observasi pada bulan ini.'}));
+  if(semua.length){
+    var h1=[{text:'Profesi',rowSpan:2},{text:'% Kepatuhan per '+satuan.toLowerCase()+' (patuh/dinilai)',colSpan:F.length}]; for(var i=1;i<F.length;i++)h1.push({});
+    var h2=[{}].concat(F.map(function(f,i){return String(i+1);}));
+    k.push(fTabel([h1,h2],semua.map(function(d){return [d.profesi].concat(F.map(function(f){var it=d.item[f.field_id];
+      return it?_persen(it.patuh,it.dinilai)+'\n('+it.patuh+'/'+it.dinilai+')':'-';}));}),
+      {kiri:[0],tebal:function(x){return x[0]==='JUMLAH';},widths:[70].concat(F.map(function(){return '*';})),font:F.length>8?6.5:8}));
+    k.push(fCatatan('Peluang dinilai = jumlah '+satuan.toLowerCase()+' yang dinilai (tanpa N/A). '+satuan+': '+F.map(function(f,i){return (i+1)+'. '+f.label;}).join('; ')+'.'));
+  }
+  return k;
+}
+/* ===== Lampiran Laporan Bulanan HH/APD: rincian tiap observasi per petugas ===== */
+function _nilaiObs(o,f){var v=o.nilai[f.field_id],neg=(f.opsi&&f.opsi[1])||'Tidak Patuh';return !v?'na':(v===neg?'tidak':'ya');}
+function htmlLampiranObservasi(r,kode){
+  var F=r.fields||[], R=r.rincian||[], adaKeg=R.some(function(o){return o.kegiatan;}), satuan=kode==='HH'?'Momen':'Item';
+  var sim={ya:'<td class="otb-n ya">✓</td>',tidak:'<td class="otb-n tidak">✗</td>',na:'<td class="otb-n na">–</td>'};
+  return '<div class="card card-pad mb"><h3>Lampiran — Rincian Observasi per Petugas</h3>'+
+    '<div class="desc mb">'+R.length+' observasi selama '+esc(r.namaBulan)+' '+r.tahun+'. Ikut tercetak sebagai lampiran PDF.</div>'+
+    (R.length?'<div class="table-scroll"><table class="otb"><thead><tr>'+
+      '<th rowspan="2" class="otb-c">No</th><th rowspan="2" class="otb-c">Tanggal</th><th rowspan="2">Ruang</th><th rowspan="2">Nama Petugas</th><th rowspan="2">Profesi</th>'+
+      (adaKeg?'<th rowspan="2">Kegiatan</th>':'')+'<th colspan="'+F.length+'" class="otb-c">'+satuan+'</th>'+
+      '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(kode==='APD'?'Temuan':'Keterangan')+'</th></tr><tr>'+
+      F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
+      R.map(function(o,n){return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(fmtID(o.tanggal))+'</td><td>'+esc(o.ruangan)+'</td><td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi||'-')+'</td>'+
+        (adaKeg?'<td>'+esc(o.kegiatan||'-')+'</td>':'')+F.map(function(f){return sim[_nilaiObs(o,f)];}).join('')+
+        '<td class="otb-c"><span class="otb-status '+(o.kepatuhan==='Patuh'?'ya':'tidak')+'">'+esc(o.kepatuhan)+'</span></td>'+
+        '<td class="otb-ket">'+(o.catatan?esc(o.catatan):'<span class="muted">-</span>')+'</td></tr>';}).join('')+
+      '</tbody></table></div>'+
+      '<div class="otb-ket-bawah"><b>Keterangan:</b> ✓ = Patuh · ✗ = Tidak patuh · – = Tidak dinilai (N/A).<ol>'+F.map(function(f){return '<li>'+esc(f.label)+'</li>';}).join('')+'</ol></div>'
+    :'<div class="desc">Belum ada observasi pada bulan ini.</div>')+'</div>';
+}
+function kontenLampiranObservasi(r,kode){
+  var F=r.fields||[], R=r.rincian||[], adaKeg=R.some(function(o){return o.kegiatan;}), n=F.length;
+  var k=[fJudul('','LAMPIRAN — Rincian Observasi per Petugas','landscape'),
+    fCatatan(R.length+' observasi · '+r.namaBulan+' '+r.tahun+(kode==='HH'?' · Kepatuhan Kebersihan Tangan':' · Kepatuhan Penggunaan APD'))];
+  var h1=[{text:'No',rowSpan:2},{text:'Tanggal',rowSpan:2},{text:'Ruang',rowSpan:2},{text:'Nama Petugas',rowSpan:2},{text:'Profesi',rowSpan:2}];
+  if(adaKeg)h1.push({text:'Kegiatan',rowSpan:2});
+  h1.push({text:kode==='HH'?'Momen':'Item',colSpan:n}); for(var i=1;i<n;i++)h1.push({});
+  h1.push({text:'Kepatuhan',rowSpan:2},{text:kode==='APD'?'Temuan':'Keterangan',rowSpan:2});
+  var h2=[{},{},{},{},{}]; if(adaKeg)h2.push({}); F.forEach(function(f,i){h2.push(String(i+1));}); h2.push({},{});
+  var sel={ya:{text:'P',alignment:'center',color:'#2f7a12',bold:true},tidak:{text:'TP',alignment:'center',color:'#b0331f',bold:true,fillColor:'#FBE3DE'},na:{text:'–',alignment:'center',color:'#9aa6b0'}};
+  var rows=R.map(function(o,i){
+    var b=[i+1,fmtID(o.tanggal),o.ruangan,o.nama_petugas,o.profesi||'-']; if(adaKeg)b.push(o.kegiatan||'-');
+    F.forEach(function(f){b.push(Object.assign({},sel[_nilaiObs(o,f)]));});
+    b.push({text:o.kepatuhan,alignment:'center',bold:true,color:o.kepatuhan==='Patuh'?'#2f7a12':'#b0331f'},o.catatan||'-');
+    return b;
+  });
+  var w=[18,44,'*','*',44]; if(adaKeg)w.push('*'); F.forEach(function(){w.push(n>8?15:18);}); w.push(48,'*');
+  k.push(fTabel([h1,h2],rows,{kiri:adaKeg?[2,3,4,5,6+n+1]:[2,3,4,5+n+1],widths:w,font:n>8?6.5:7.5,kosong:'Belum ada observasi pada bulan ini.'}));
+  k.push(fCatatan('Keterangan: P = Patuh · TP = Tidak patuh · – = Tidak dinilai (N/A). '+(kode==='HH'?'Momen':'Item')+': '+
+    F.map(function(f,i){return (i+1)+'. '+f.label;}).join('; ')+'.'));
+  return k;
+}
 function kontenLaporanObservasi(r,kode){
   _noGbr=0; var k=[], lebar=595-72, satuan=kode==='HH'?'Momen':'Item';
   k.push(fJudul('A','Grafik Kepatuhan per '+satuan));
   k=k.concat(fGambar('lpChartObs','Persentase kepatuhan per '+satuan.toLowerCase()+', '+r.namaBulan+' '+r.tahun,lebar,210));
   k.push(fJudul('B','Rincian Kepatuhan per '+satuan));
   k.push(fTabel(['No',satuan,'Patuh','Diamati','Kepatuhan'],r.itemChart.map(function(x,i){return [i+1,x.label,x.patuh,x.total,x.persen===null?'N/A':x.persen+'%'];}),{kiri:[1],widths:[22,'*',50,50,60]}));
-  k.push(fJudul('C','Form A — Sensus Harian Indikator Mutu'));
+  k=k.concat(kontenPerProfesi(r,kode,'C'));
+  k.push(fJudul('D','Form A — Sensus Harian Indikator Mutu'));
   var rows=r.formA.map(function(x,i){return [i+1,x.ruang,x.total,x.peluang,x.capaian===null?'N/A':x.capaian+'%'];});
   rows.push(['','JUMLAH',r.formATotal.total,r.formATotal.peluang,r.formATotal.capaian===null?'N/A':r.formATotal.capaian+'%']);
   k.push(fTabel(['No','Ruang','Total','Peluang','Hasil Capaian'],rows,{kiri:[1],tebal:function(x){return x[1]==='JUMLAH';},widths:[22,'*',60,60,70]}));
-  k.push(fJudul('D','Form B — Laporan Indikator Mutu (Komite PMKP)'));
+  k.push(fJudul('E','Form B — Laporan Indikator Mutu (Komite PMKP)'));
   var b=r.formB, v=function(id,def){var e=document.getElementById(id);return (e&&e.value.trim())||def||'-';};
   var isi=[['Judul Indikator',b.judul_indikator],['Area Monitoring',b.area_monitoring],['Numerator',b.numerator],['Denominator',b.denominator],
     ['Formula',b.formula],['Target',b.target],['Hasil Capaian',b.hasil_capaian],['Kesimpulan',b.kesimpulan],
@@ -3235,6 +3402,7 @@ function ppiPDF(opts){
         ekor.forEach(function(x){delete x.headlineLevel;});
         isi.push({unbreakable:true,stack:ekor.concat([ttdPdf(ttd,lebar,verif)])});
       } else isi.push(ttdPdf(ttd,lebar,verif));
+      if(opts.lampiran&&opts.lampiran.length)isi=isi.concat(opts.lampiran);   // lampiran sesudah tanda tangan
       var dicetak='Dicetak dari SIPPI AMI · '+tglPanjangID(todayISO())+' '+new Date().toTimeString().slice(0,5)+' · '+S.user.nama+
         (verif?' · Kode verifikasi tanda tangan: '+verif.kode:'');
       var dd={pageSize:'A4',pageOrientation:orient,pageMargins:[36,30,36,36],content:isi,
