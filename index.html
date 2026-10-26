@@ -597,7 +597,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.10.26.4';
+var VERSI_TAMPILAN='2026.10.26.6';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -2032,7 +2032,7 @@ function viewLaporan(c){
       '<div id="lpArea"></div>';
     var descLp=function(){var sv=survei.filter(function(s){return s.survei_id===$('#lpSurvei').value;})[0];
       $('#lpDesc').textContent=sv&&(sv.kode==='HH'||sv.kode==='APD')
-        ?'Laporan siap cetak (PDF): grafik & rincian per '+(sv.kode==='HH'?'momen':'item')+', kepatuhan per profesi, Form A, Form B (analisa & rekomendasi dapat diedit), dan lampiran per petugas.'
+        ?'Laporan siap cetak (PDF): grafik & rincian per '+(sv.kode==='HH'?'momen':'item')+', kepatuhan per profesi, kepatuhan per unit, Form A, Form B (analisa & rekomendasi dapat diedit), dan lampiran per petugas.'
         :'Laporan siap cetak (PDF): ringkasan capaian, tabel bulanan, daftar kejadian pasien, dan analisis. Anda dapat mengedit/menambahkan narasi sebelum mencetak.';};
     $('#lpSurvei').onchange=descLp; descLp();
     $('#lpBuat').onclick=function(){
@@ -2192,7 +2192,9 @@ function renderLaporanObservasi(area,r,kode){
     return '<tr'+(x.peluang?'':' class="lp-redup"')+'><td>'+(i+1)+'</td><td class="left">'+esc(x.ruang)+'</td><td>'+x.total+'</td><td>'+x.peluang+'</td><td><b>'+pct(x.capaian)+'</b></td></tr>';}).join('');
   var h2='<div class="lp-page">'+subHead+
       '<h3 class="lp-h">C. Kepatuhan per Profesi</h3><div class="lp-embed">'+htmlPerProfesi(r,kode)+'</div>'+
-      '<h3 class="lp-h mt-lg">D. Form A — Sensus Harian Indikator Mutu</h3>'+
+    '</div><div class="lp-page">'+subHead+
+      '<h3 class="lp-h">D. Kepatuhan per Unit</h3><div class="lp-embed">'+htmlPerUnit(r,kode)+'</div>'+
+      '<h3 class="lp-h mt-lg">E. Form A — Sensus Harian Indikator Mutu</h3>'+
       '<div class="small muted mb">'+esc(r.formB.judul_indikator)+' &middot; '+esc(per)+' &middot; Area: Semua Unit Pelayanan</div>'+
       '<table class="lp-tabel tabel-harian"><thead><tr><th>No</th><th>Ruang</th><th>Total</th><th>Peluang</th><th>Hasil Capaian</th></tr></thead><tbody>'+barisA+
       '<tr class="total"><td></td><td class="left">JUMLAH</td><td>'+r.formATotal.total+'</td><td>'+r.formATotal.peluang+'</td><td>'+pct(r.formATotal.capaian)+'</td></tr></tbody></table>'+
@@ -2200,7 +2202,7 @@ function renderLaporanObservasi(area,r,kode){
   // ---- Halaman 3: E Form B (analisa & rekomendasi dapat diedit) + tanda tangan ----
   var b=r.formB, baris=function(l,v){return '<tr><th class="left" style="width:30%">'+l+'</th><td class="left">'+v+'</td></tr>';};
   var h3='<div class="lp-page" id="formBArea">'+subHead+
-      '<h3 class="lp-h">E. Form B — Laporan Indikator Mutu (Komite PMKP)</h3>'+
+      '<h3 class="lp-h">F. Form B — Laporan Indikator Mutu (Komite PMKP)</h3>'+
       '<table class="lp-tabel lp-formb"><tbody>'+
         baris('Judul Indikator',esc(b.judul_indikator))+baris('Area Monitoring',esc(b.area_monitoring))+
         baris('Numerator',esc(b.numerator))+baris('Denominator',esc(b.denominator))+
@@ -2225,7 +2227,7 @@ function renderLaporanObservasi(area,r,kode){
   $('#lpUlang').onclick=function(){ area.innerHTML=''; };
   var sheet=$('#lpSheet');
   sheet.insertAdjacentHTML('beforeend','<div class="lp-page lp-landscape">'+subHead+'<h3 class="lp-h">LAMPIRAN — Rincian Observasi per Petugas</h3><div class="lp-embed">'+htmlLampiranObservasi(r,kode)+'</div></div>');
-  gambarGrafikProfesi(r,kode);
+  gambarGrafikProfesi(r,kode); gambarGrafikUnit(r,kode);
   var labels=r.itemChart.map(function(x){return labelSingkat(x.label);});
   var data=r.itemChart.map(function(x){return x.persen===null?0:x.persen;});
   buatChart($('#lpChartObs').getContext('2d'),{type:'bar',data:{labels:labels,datasets:[{label:'Kepatuhan (%)',data:data,backgroundColor:r.itemChart.map(function(x){return x.peluang===false?'#9AA6B0':'#0F6E56';}),borderRadius:4,maxBarThickness:40}]},
@@ -2330,7 +2332,7 @@ function renderObsStep1(area){
   }
   $all('.obs-item').forEach(function(row){$all('button',row).forEach(function(b){b.onclick=function(){pilih(row,b.dataset.v);};});});
   $('#obsSemuaYa').onclick=function(){$all('.obs-item').forEach(function(row){if(st.jawaban[row.dataset.f]===undefined)pilih(row,row.querySelector('.ya').dataset.v);});};
-  $('#obsTgl').onchange=$('#obsRuang').onchange=loadObsLog;
+  $('#obsTgl').onchange=loadObsLog;
   ringkas();
   function gambarFoto(){
     $('#obsFotoGrid').innerHTML=st.foto.map(function(d,i){
@@ -2392,21 +2394,27 @@ function loadObsLog(){
   var st=OBS_STATE, tgl=$('#obsTgl')?$('#obsTgl').value:todayISO(), rid=$('#obsRuang')?$('#obsRuang').value:'';
   var el=$('#obsLogArea'); if(!el)return; el.innerHTML='<div class="spinner"></div>';
   var satuan=st.kode==='HH'?'momen':'item';
-  call('getLogObservasi',S.token,st.sv.survei_id,rid,tgl).then(function(list){
-    if(!list||!list.length){el.innerHTML='<div class="empty"><h3>Belum ada observasi</h3><p>Untuk ruangan &amp; tanggal ini.</p></div>';return;}
+  // Tampilkan SEMUA ruangan pada tanggal itu, agar observasi dari perangkat/ruangan lain langsung terlihat.
+  call('getLogObservasi',S.token,st.sv.survei_id,'',tgl).then(function(list){
+    if(list&&list.length&&list[0].ruangan===undefined)return call('getLogObservasi',S.token,st.sv.survei_id,rid,tgl);  // server lama
+    return list;
+  }).then(function(list){
+    var muat='<button class="btn ghost sm" onclick="loadObsLog()">Muat ulang</button>';
+    if(!list||!list.length){el.innerHTML='<div class="empty"><h3>Belum ada observasi</h3><p>Pada tanggal '+esc(fmtID(tgl))+' (semua ruangan).</p>'+muat+'</div>';return;}
+    var adaRuang=list[0].ruangan!==undefined;
     var F=st.sv.fields;
     var simbol=function(o,f){var v=(o.nilai||{})[f.field_id],neg=(f.opsi&&f.opsi[1])||'Tidak Patuh';
       if(!v)return '<td class="otb-n na" title="N/A">–</td>';
       return v===neg?'<td class="otb-n tidak" title="'+esc(v)+'">✗</td>':'<td class="otb-n ya" title="'+esc(v)+'">✓</td>';};
-    el.innerHTML='<div class="card card-pad"><h3 class="mb">Observasi hari ini ('+list.length+')</h3>'+
+    el.innerHTML='<div class="card card-pad"><div class="flex between mb"><h3>Observasi '+(tgl===todayISO()?'hari ini':esc(fmtID(tgl)))+' — semua ruangan ('+list.length+')</h3>'+muat+'</div>'+
       '<div class="table-scroll"><table class="otb"><thead><tr>'+
-        '<th rowspan="2" class="otb-c">No</th><th rowspan="2" class="otb-c">Jam</th><th rowspan="2">Nama Petugas</th><th rowspan="2">Profesi</th>'+
+        '<th rowspan="2" class="otb-c">No</th><th rowspan="2" class="otb-c">Jam</th>'+(adaRuang?'<th rowspan="2">Ruang</th>':'')+'<th rowspan="2">Nama Petugas</th><th rowspan="2">Profesi</th>'+
         (st.sv.kegiatan?'<th rowspan="2">Kegiatan</th>':'')+
         '<th colspan="'+F.length+'" class="otb-c">'+(st.kode==='HH'?'Momen':'Item')+'</th>'+
         '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(st.kode==='APD'?'Temuan':'Keterangan')+'</th><th rowspan="2">Foto</th><th rowspan="2" class="otb-c">Aksi</th></tr>'+
         '<tr>'+F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
       list.map(function(o,n){
-        return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td><td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
+        return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td>'+(adaRuang?'<td>'+esc(o.ruangan||'-')+'</td>':'')+'<td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
           (st.sv.kegiatan?'<td>'+esc(_kegTeks(o))+'</td>':'')+
           F.map(function(f){return simbol(o,f);}).join('')+
           '<td class="otb-c"><span class="otb-status '+(o.kepatuhan==='Patuh'?'ya':'tidak')+'">'+esc(o.kepatuhan)+'</span></td>'+
@@ -3267,6 +3275,79 @@ function hitungPerProfesi(r){
   return {list:list,total:tot};
 }
 function _persen(a,b){return b?Math.round(a/b*1000)/10+'%':'-';}
+/* ===== Kepatuhan per unit (ruangan) — HH: per peluang (5 momen); APD: per observasi (sama dengan Form A) ===== */
+function hitungPerUnit(r){
+  var F=r.fields||[], peta={}, urut=(r.formA||[]).map(function(x){return x.ruang;});
+  (r.rincian||[]).forEach(function(o){
+    var u=o.ruangan||'-', d=peta[u]=peta[u]||{unit:u,obs:0,obsPatuh:0,dinilai:0,patuh:0,item:{}};
+    d.obs++; if(o.kepatuhan==='Patuh')d.obsPatuh++;
+    F.forEach(function(f){var s=_nilaiObs(o,f); if(s==='na')return; var pl=_fieldPeluang(f);
+      var it=d.item[f.field_id]=d.item[f.field_id]||{dinilai:0,patuh:0}; it.dinilai++; if(pl)d.dinilai++; if(s==='ya'){it.patuh++;if(pl)d.patuh++;}});
+  });
+  var list=Object.keys(peta).map(function(k){return peta[k];});
+  list.sort(function(a,b){var ia=urut.indexOf(a.unit),ib=urut.indexOf(b.unit);return (ia<0?999:ia)-(ib<0?999:ib)||a.unit.localeCompare(b.unit);});
+  var tot={unit:'RUMAH SAKIT',obs:0,obsPatuh:0,dinilai:0,patuh:0,item:{}};
+  list.forEach(function(d){tot.obs+=d.obs;tot.obsPatuh+=d.obsPatuh;tot.dinilai+=d.dinilai;tot.patuh+=d.patuh;
+    Object.keys(d.item).forEach(function(k){var t=tot.item[k]=tot.item[k]||{dinilai:0,patuh:0};t.dinilai+=d.item[k].dinilai;t.patuh+=d.item[k].patuh;});});
+  return {list:list,total:tot};
+}
+function _capUnit(d,kode){return kode==='APD'?{a:d.obsPatuh,b:d.obs}:{a:d.patuh,b:d.dinilai};}
+function htmlPerUnit(r,kode){
+  if(!r.fields||!r.rincian)return '<div class="card card-pad mb"><h3>Kepatuhan per Unit</h3>'+PESAN_SERVER_LAMA+'</div>';
+  var U=hitungPerUnit(r), F=r.fields||[], satuan=kode==='HH'?'momen':'item', target=kode==='HH'?85:100;
+  if(!U.list.length)return '<div class="card card-pad mb"><h3>Kepatuhan per Unit</h3><div class="desc">Belum ada observasi pada bulan ini.</div></div>';
+  var semua=U.list.concat([U.total]);
+  var t1='<table class="otb"><thead><tr><th class="otb-c">No</th><th>Unit / Ruangan</th><th class="otb-c">Observasi</th>'+
+    (kode==='HH'?'<th class="otb-c">Peluang</th><th class="otb-c">Patuh</th>':'<th class="otb-c">Petugas Patuh</th>')+
+    '<th class="otb-c">% Kepatuhan</th><th class="otb-c">Target '+target+'%</th></tr></thead><tbody>'+
+    semua.map(function(d,i){var tb=d===U.total, c=_capUnit(d,kode), p=c.b?Math.round(c.a/c.b*10000)/100:null;
+      return '<tr'+(tb?' class="otb-jml"':'')+'><td class="otb-c">'+(tb?'':i+1)+'</td><td><b>'+esc(d.unit)+'</b></td><td class="otb-c">'+d.obs+'</td>'+
+        (kode==='HH'?'<td class="otb-c">'+d.dinilai+'</td><td class="otb-c">'+d.patuh+'</td>':'<td class="otb-c">'+d.obsPatuh+'</td>')+
+        '<td class="otb-c"><b>'+(p===null?'N/A':p+'%')+'</b></td><td class="otb-c">'+(p===null?'-':p>=target?'Tercapai':'<span style="color:var(--danger)">Belum</span>')+'</td></tr>';}).join('')+'</tbody></table>';
+  var t2='<table class="otb"><thead><tr><th rowspan="2">Unit / Ruangan</th><th colspan="'+F.length+'" class="otb-c">% Kepatuhan per '+satuan+'</th></tr><tr>'+
+    F.map(function(f,i){return '<th class="otb-c" title="'+esc(f.label)+'">'+(i+1)+(_fieldPeluang(f)||kode!=='HH'?'':'*')+'</th>';}).join('')+'</tr></thead><tbody>'+
+    semua.map(function(d){var tb=d===U.total;return '<tr'+(tb?' class="otb-jml"':'')+'><td><b>'+esc(d.unit)+'</b></td>'+F.map(function(f){var it=d.item[f.field_id];
+      return '<td class="otb-c">'+(it?_persen(it.patuh,it.dinilai)+'<div class="small muted">'+it.patuh+'/'+it.dinilai+'</div>':'<span class="muted">-</span>')+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table>';
+  return '<div class="card card-pad mb"><h3>Kepatuhan per Unit</h3>'+
+    '<h3 class="mb small">Diagram Batang — % Kepatuhan per Unit</h3><div class="chart-prof"><canvas id="lpChartUnit"></canvas></div>'+
+    (kode==='HH'?'<h3 class="mt mb small">Diagram Batang — % Kepatuhan tiap Momen per Unit</h3><div class="chart-prof tinggi"><canvas id="lpChartUnitMomen"></canvas></div>':'')+
+    '<div class="desc mb mt">'+(kode==='HH'?'% kepatuhan unit = momen patuh ÷ peluang (5 momen, tanpa N/A), sama dengan Form A.':'% kepatuhan unit = petugas yang patuh di semua item ÷ petugas yang diamati, sama dengan Form A.')+' Hanya unit yang diobservasi bulan ini yang ditampilkan.</div>'+
+    '<div class="table-scroll">'+t1+'</div><h3 class="mt mb small">Rincian per '+satuan+' tiap unit</h3><div class="table-scroll">'+t2+'</div>'+
+    '<div class="otb-ket-bawah">'+(kode==='HH'?'Momen':'Item')+': '+F.map(function(f,i){return (i+1)+'. '+esc(f.label);}).join(' · ')+'</div></div>';
+}
+function gambarGrafikUnit(r,kode){
+  if(!r.fields||!r.rincian)return;
+  var U=hitungPerUnit(r), F=(r.fields||[]).filter(function(f){return kode!=='HH'||_fieldPeluang(f);}); if(!U.list.length)return;
+  var lbl=U.list.map(function(d){return d.unit;}), target=kode==='HH'?85:100;
+  var c1=document.getElementById('lpChartUnit');
+  if(c1){var val=U.list.map(function(d){var c=_capUnit(d,kode);return _persenAngka(c.a,c.b);}), ct=_capUnit(U.total,kode);
+    buatChart(c1.getContext('2d'),{type:'bar',data:{labels:lbl.concat(['RUMAH SAKIT']),datasets:[{label:'% Kepatuhan',
+      data:val.concat([_persenAngka(ct.a,ct.b)]),
+      backgroundColor:val.map(function(v){return v>=target?'#0F6E56':'#D5503A';}).concat(['#1476BE']),borderRadius:4,maxBarThickness:42}]},options:_opsiPersen(false),plugins:[labelNilaiBatang]});}
+  var c2=document.getElementById('lpChartUnitMomen');
+  if(c2)buatChart(c2.getContext('2d'),{type:'bar',data:{labels:lbl,datasets:F.map(function(f,i){return {label:labelSingkat(f.label),
+    data:U.list.map(function(d){var it=d.item[f.field_id];return it?_persenAngka(it.patuh,it.dinilai):null;}),
+    backgroundColor:WARNA_SERI[i%WARNA_SERI.length],borderRadius:3,maxBarThickness:18};})},options:_opsiPersen(true),plugins:[labelNilaiBatang]});
+}
+function kontenPerUnit(r,kode,huruf){
+  if(!r.fields||!r.fields.length||!r.rincian)return [fJudul(huruf,'Kepatuhan per Unit'),fCatatan('Belum tersedia — Kode.gs di server perlu diperbarui.')];
+  var U=hitungPerUnit(r), F=r.fields||[], satuan=kode==='HH'?'Momen':'Item', target=kode==='HH'?85:100, lebar=595-72, k=[fJudul(huruf,'Kepatuhan per Unit')];
+  if(!U.list.length){k.push(fCatatan('Belum ada observasi pada bulan ini.'));return k;}
+  k=k.concat(fGambar('lpChartUnit','Persentase kepatuhan per unit, '+r.namaBulan+' '+r.tahun+' (merah = belum mencapai target '+target+'%)',lebar,200));
+  if(kode==='HH')k=k.concat(fGambar('lpChartUnitMomen','Persentase kepatuhan tiap momen per unit, '+r.namaBulan+' '+r.tahun,lebar,240));
+  var semua=U.list.concat([U.total]);
+  k.push(fTabel(kode==='HH'?['No','Unit / Ruangan','Observasi','Peluang','Patuh','% Kepatuhan','Target '+target+'%']:['No','Unit / Ruangan','Observasi','Petugas Patuh','% Kepatuhan','Target '+target+'%'],
+    semua.map(function(d,i){var c=_capUnit(d,kode),p=c.b?Math.round(c.a/c.b*10000)/100:null,st=p===null?'-':p>=target?'Tercapai':'Belum';
+      return kode==='HH'?[d===U.total?'':i+1,d.unit,d.obs,d.dinilai,d.patuh,p===null?'N/A':p+'%',st]:[d===U.total?'':i+1,d.unit,d.obs,d.obsPatuh,p===null?'N/A':p+'%',st];}),
+    {kiri:[1],tebal:function(x){return x[1]==='RUMAH SAKIT';},widths:kode==='HH'?[20,'*',50,50,45,60,60]:[20,'*',55,60,60,60]}));
+  var h1=[{text:'Unit / Ruangan',rowSpan:2},{text:'% Kepatuhan per '+satuan.toLowerCase()+' (patuh/dinilai)',colSpan:F.length}]; for(var i=1;i<F.length;i++)h1.push({});
+  var h2=[{}].concat(F.map(function(f,i){return String(i+1)+(kode==='HH'&&!_fieldPeluang(f)?'*':'');}));
+  k.push(fTabel([h1,h2],semua.map(function(d){return [d.unit].concat(F.map(function(f){var it=d.item[f.field_id];
+    return it?_persen(it.patuh,it.dinilai)+'\n('+it.patuh+'/'+it.dinilai+')':'-';}));}),
+    {kiri:[0],tebal:function(x){return x[0]==='RUMAH SAKIT';},widths:[80].concat(F.map(function(){return '*';})),font:F.length>8?6.5:8}));
+  k.push(fCatatan(satuan+': '+F.map(function(f,i){return (i+1)+'. '+f.label;}).join('; ')+'.'+(kode==='HH'?' * tidak dihitung sebagai peluang.':'')));
+  return k;
+}
 function htmlPerProfesi(r,kode){
   if(!r.fields||!r.rincian)return '<div class="card card-pad mb"><h3>Kepatuhan per Profesi</h3>'+PESAN_SERVER_LAMA+'</div>';
   var P=hitungPerProfesi(r), F=r.fields||[], satuan=kode==='HH'?'momen':'item';
@@ -3395,11 +3476,12 @@ function kontenLaporanObservasi(r,kode){
   k.push(fTabel(['No',satuan,'Patuh','Diamati','Kepatuhan'],r.itemChart.map(function(x,i){return [i+1,x.label+(x.peluang===false?' *':''),x.patuh,x.total,x.persen===null?'N/A':x.persen+'%'];}),{kiri:[1],widths:[22,'*',50,50,60]}));
   if(r.itemChart.some(function(x){return x.peluang===false;}))k.push(fCatatan('* Dicatat terpisah, tidak dihitung sebagai peluang kebersihan tangan (peluang = 5 momen).'));
   k=k.concat(kontenPerProfesi(r,kode,'C'));
-  k.push(fJudul('D','Form A — Sensus Harian Indikator Mutu'));
+  k=k.concat(kontenPerUnit(r,kode,'D'));
+  k.push(fJudul('E','Form A — Sensus Harian Indikator Mutu'));
   var rows=r.formA.map(function(x,i){return [i+1,x.ruang,x.total,x.peluang,x.capaian===null?'N/A':x.capaian+'%'];});
   rows.push(['','JUMLAH',r.formATotal.total,r.formATotal.peluang,r.formATotal.capaian===null?'N/A':r.formATotal.capaian+'%']);
   k.push(fTabel(['No','Ruang','Total','Peluang','Hasil Capaian'],rows,{kiri:[1],tebal:function(x){return x[1]==='JUMLAH';},widths:[22,'*',60,60,70]}));
-  k.push(fJudul('E','Form B — Laporan Indikator Mutu (Komite PMKP)'));
+  k.push(fJudul('F','Form B — Laporan Indikator Mutu (Komite PMKP)'));
   var b=r.formB, v=function(id,def){var e=document.getElementById(id);return (e&&e.value.trim())||def||'-';};
   var isi=[['Judul Indikator',b.judul_indikator],['Area Monitoring',b.area_monitoring],['Numerator',b.numerator],['Denominator',b.denominator],
     ['Formula',b.formula],['Target',b.target],['Hasil Capaian',b.hasil_capaian],['Kesimpulan',b.kesimpulan],
