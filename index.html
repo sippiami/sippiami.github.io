@@ -550,6 +550,7 @@
   .idle-kotak{background:#fff;border-radius:16px;padding:22px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.25)}
   .idle-kotak h3{margin:0 0 8px}.idle-kotak p{margin:0 0 16px;font-size:14px;line-height:1.5}.idle-kotak b{color:var(--danger,#c0392b);font-size:16px}
   .idle-aksi{display:flex;gap:8px;justify-content:flex-end}
+  .chart-prof{position:relative;height:240px}.chart-prof.tinggi{height:300px}
 </style>
   <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -565,7 +566,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.10.21.2';
+var VERSI_TAMPILAN='2026.10.26';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -1950,9 +1951,10 @@ function loadTren(){
 }
 function drawLine(id,labels,data,nama,satuan){
   var ctx=document.getElementById(id).getContext('2d');
-  buatChart(ctx,{type:'line',data:{labels:labels,datasets:[{label:nama+' ('+satuan+')',data:data,
-    borderColor:'#16564F',backgroundColor:'rgba(42,157,143,.15)',fill:true,tension:.3,pointBackgroundColor:'#0F3B3A',pointRadius:3}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#E4ECEA'}},x:{grid:{display:false}}}}});
+  buatChart(ctx,{type:'bar',data:{labels:labels,datasets:[{label:nama+' ('+satuan+')',data:data,
+    backgroundColor:'#1476BE',borderRadius:4,maxBarThickness:36}]},
+    options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.parsed.y+' '+satuan;}}}},
+      scales:{y:{beginAtZero:true,grid:{color:'#E4ECEA'}},x:{grid:{display:false}}}}});
 }
 
 /* ================= LAPORAN BULANAN (Komite PPI) ================= */
@@ -2155,6 +2157,7 @@ function renderLaporanObservasi(area,r,kode){
       '<button class="btn" id="obsPdf">Unduh PDF</button></div></div>';
 
   area.insertAdjacentHTML('beforeend',htmlLampiranObservasi(r,kode));
+  gambarGrafikProfesi(r,kode);
   var labels=r.itemChart.map(function(x){return labelSingkat(x.label);});
   var data=r.itemChart.map(function(x){return x.persen===null?0:x.persen;});
   buatChart($('#lpChartObs').getContext('2d'),{type:'bar',data:{labels:labels,datasets:[{label:'Kepatuhan (%)',data:data,backgroundColor:'#0F6E56',borderRadius:4,maxBarThickness:40}]},
@@ -2195,6 +2198,7 @@ function renderObsStep1(area){
     '<div><label>Kegiatan</label><select id="obsKegiatan">'+sv.kegiatan.map(function(k){return '<option value="'+esc(k)+'"'+(id.kegiatanPilih===k?' selected':'')+'>'+esc(k)+'</option>';}).join('')+'</select></div>'+
     '<div id="obsKegiatanLainWrap" style="display:none"><label>Kegiatan lainnya</label><input id="obsKegiatanLain" placeholder="Tulis kegiatan"></div>'
     :'';
+  if(id.profesi)id.profesi=normProfesi(id.profesi);
   var profesi=DAFTAR_PROFESI, profLain=id.profesi&&profesi.indexOf(id.profesi)<0;
   var item=sv.fields.map(function(f,i){
     var o=f.opsi&&f.opsi.length===2?f.opsi:['Patuh','Tidak Patuh'];
@@ -2329,7 +2333,7 @@ function loadObsLog(){
         '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(st.kode==='APD'?'Temuan':'Keterangan')+'</th><th rowspan="2">Foto</th><th rowspan="2" class="otb-c">Aksi</th></tr>'+
         '<tr>'+F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
       list.map(function(o,n){
-        return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td><td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi||'-')+'</td>'+
+        return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td><td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
           (st.sv.kegiatan?'<td>'+esc(o.kegiatan||'-')+'</td>':'')+
           F.map(function(f){return simbol(o,f);}).join('')+
           '<td class="otb-c"><span class="otb-status '+(o.kepatuhan==='Patuh'?'ya':'tidak')+'">'+esc(o.kepatuhan)+'</span></td>'+
@@ -2363,7 +2367,10 @@ function buatThumb(dataUrl){
 var MAKS_FOTO=5;
 /* Pilihan profesi petugas yang diobservasi (Survei HH & APD). "Lainnya" -> diketik sendiri. */
 var DAFTAR_PROFESI=['Dokter Spesialis','Dokter Umum','Dokter Gigi','Perawat','Bidan','Analis Laboratorium (ATLM)','Radiografer',
-  'Apoteker / Tenaga Teknis Kefarmasian','Ahli Gizi','Fisioterapis','Petugas Kebersihan','Peserta Didik / Mahasiswa','Lainnya'];
+  'Apoteker / Tenaga Teknis Kefarmasian','Ahli Gizi','Fisioterapis','Pramusaji','Cleaning Service','Peserta Didik / Mahasiswa','Lainnya'];
+/* Nama profesi lama yang sudah tersimpan -> nama baru (agar rekap per profesi tidak terpecah). */
+var PROFESI_LAMA={'Petugas Kebersihan':'Cleaning Service','Petugas kebersihan':'Cleaning Service','Cleaning service':'Cleaning Service','Pramusaji / Gizi':'Pramusaji'};
+function normProfesi(p){p=String(p||'').trim();return PROFESI_LAMA[p]||p||'Lainnya';}
 var IKON_KAMERA='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
 var IKON_GALERI='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
 /* Perkecil foto (maks 1280 px, JPEG) agar cepat diunggah dari HP. */
@@ -3164,7 +3171,7 @@ function kontenLaporanBulanan(r){
 function hitungPerProfesi(r){
   var F=r.fields||[], peta={}, URUT=DAFTAR_PROFESI;
   (r.rincian||[]).forEach(function(o){
-    var p=o.profesi||'Lainnya', d=peta[p]=peta[p]||{profesi:p,obs:0,obsPatuh:0,dinilai:0,patuh:0,item:{}};
+    var p=normProfesi(o.profesi), d=peta[p]=peta[p]||{profesi:p,obs:0,obsPatuh:0,dinilai:0,patuh:0,item:{}};
     d.obs++; if(o.kepatuhan==='Patuh')d.obsPatuh++;
     F.forEach(function(f){var s=_nilaiObs(o,f); if(s==='na')return;
       var it=d.item[f.field_id]=d.item[f.field_id]||{dinilai:0,patuh:0}; it.dinilai++; d.dinilai++; if(s==='ya'){it.patuh++;d.patuh++;}});
@@ -3191,13 +3198,47 @@ function htmlPerProfesi(r,kode){
     semua.map(function(d){var tb=d===P.total;return '<tr'+(tb?' class="otb-jml"':'')+'><td><b>'+esc(d.profesi)+'</b></td>'+F.map(function(f){var it=d.item[f.field_id];
       return '<td class="otb-c">'+(it?_persen(it.patuh,it.dinilai)+'<div class="small muted">'+it.patuh+'/'+it.dinilai+'</div>':'<span class="muted">-</span>')+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table>';
   return '<div class="card card-pad mb"><h3>Kepatuhan per Profesi</h3>'+
-    '<div class="desc mb">Peluang dinilai = jumlah '+satuan+' yang dinilai (tanpa N/A). % kepatuhan = patuh ÷ peluang dinilai.</div>'+
+    '<h3 class="mb small">Diagram Batang — % Kepatuhan per Profesi</h3><div class="chart-prof"><canvas id="lpChartProf"></canvas></div>'+
+    (kode==='HH'?'<h3 class="mt mb small">Diagram Batang — % Kepatuhan tiap Momen per Profesi</h3><div class="chart-prof tinggi"><canvas id="lpChartProfMomen"></canvas></div>':'')+
+    '<div class="desc mb mt">Peluang dinilai = jumlah '+satuan+' yang dinilai (tanpa N/A). % kepatuhan = patuh ÷ peluang dinilai.</div>'+
     '<div class="table-scroll">'+t1+'</div><h3 class="mt mb small">Rincian per '+satuan+'</h3><div class="table-scroll">'+t2+'</div>'+
     '<div class="otb-ket-bawah">'+(kode==='HH'?'Momen':'Item')+': '+F.map(function(f,i){return (i+1)+'. '+esc(f.label);}).join(' · ')+'</div></div>';
 }
+var WARNA_SERI=['#1476BE','#2E9D6A','#E0A100','#D5503A','#7B5EA7','#0FA3B1','#8C6D46','#C2185B','#5B7083','#7AB82E'];
+/* Tulis angka di atas tiap batang (agar terbaca juga saat dicetak / nilai 0). */
+var labelNilaiBatang={id:'labelNilai',afterDatasetsDraw:function(ch,args,opt){
+  var c=ch.ctx, persen=opt&&opt.persen, uk=(opt&&opt.ukuran)||10; c.save(); c.font='600 '+uk+'px sans-serif'; c.fillStyle='#33424f'; c.textAlign='center'; c.textBaseline='bottom';
+  ch.data.datasets.forEach(function(ds,i){var m=ch.getDatasetMeta(i); if(m.hidden)return;
+    m.data.forEach(function(el,j){var v=ds.data[j]; if(v==null)return; c.fillText((Math.round(v*10)/10)+(persen?'%':''),el.x,el.y-2);});});
+  c.restore();}};
+function _persenAngka(a,b){return b?Math.round(a/b*1000)/10:0;}
+function _opsiPersen(legend){return {responsive:true,maintainAspectRatio:false,animation:false,
+  layout:{padding:{top:16}},
+  plugins:{labelNilai:{persen:true,ukuran:legend?8:10},legend:{display:!!legend,position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+    tooltip:{callbacks:{label:function(c){return (legend?c.dataset.label+': ':'')+c.parsed.y+'%';}}}},
+  scales:{y:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}},grid:{color:'#E4ECEA'}},
+    x:{grid:{display:false},ticks:{autoSkip:false,maxRotation:40,minRotation:0,font:{size:10}}}}};}
+/* Diagram batang kepatuhan per profesi (dan untuk HH: tiap momen per profesi). */
+function gambarGrafikProfesi(r,kode){
+  if(!r.fields||!r.rincian)return;
+  var P=hitungPerProfesi(r), F=r.fields||[]; if(!P.list.length)return;
+  var lbl=P.list.map(function(d){return d.profesi.replace(' / Tenaga Teknis Kefarmasian','/TTK').replace(' / Mahasiswa','');});
+  var c1=document.getElementById('lpChartProf');
+  if(c1)buatChart(c1.getContext('2d'),{type:'bar',data:{labels:lbl.concat(['RATA-RATA RS']),datasets:[{label:'% Kepatuhan',
+    data:P.list.map(function(d){return _persenAngka(d.patuh,d.dinilai);}).concat([_persenAngka(P.total.patuh,P.total.dinilai)]),
+    backgroundColor:P.list.map(function(){return '#0F6E56';}).concat(['#1476BE']),borderRadius:4,maxBarThickness:42}]},options:_opsiPersen(false),plugins:[labelNilaiBatang]});
+  var c2=document.getElementById('lpChartProfMomen');
+  if(c2)buatChart(c2.getContext('2d'),{type:'bar',data:{labels:lbl,datasets:F.map(function(f,i){return {label:labelSingkat(f.label),
+    data:P.list.map(function(d){var it=d.item[f.field_id];return it?_persenAngka(it.patuh,it.dinilai):null;}),
+    backgroundColor:WARNA_SERI[i%WARNA_SERI.length],borderRadius:3,maxBarThickness:18};})},options:_opsiPersen(true),plugins:[labelNilaiBatang]});
+}
 function kontenPerProfesi(r,kode,huruf){
   if(!r.fields||!r.fields.length||!r.rincian)return [fJudul(huruf,'Kepatuhan per Profesi'),fCatatan('Belum tersedia — Kode.gs di server perlu diperbarui.')];
-  var P=hitungPerProfesi(r), F=r.fields||[], satuan=kode==='HH'?'Momen':'Item', k=[fJudul(huruf,'Kepatuhan per Profesi')];
+  var P=hitungPerProfesi(r), F=r.fields||[], satuan=kode==='HH'?'Momen':'Item', k=[fJudul(huruf,'Kepatuhan per Profesi')], lebar=595-72;
+  if(P.list.length){
+    k=k.concat(fGambar('lpChartProf','Persentase kepatuhan per profesi, '+r.namaBulan+' '+r.tahun,lebar,200));
+    if(kode==='HH')k=k.concat(fGambar('lpChartProfMomen','Persentase kepatuhan tiap momen per profesi, '+r.namaBulan+' '+r.tahun,lebar,240));
+  }
   var semua=P.list.length?P.list.concat([P.total]):[];
   k.push(fTabel(['No','Profesi','Observasi','Observasi Patuh','Peluang Dinilai','Patuh','Tidak Patuh','% Kepatuhan'],
     semua.map(function(d,i){return [d===P.total?'':i+1,d.profesi,d.obs,d.obsPatuh,d.dinilai,d.patuh,d.dinilai-d.patuh,_persen(d.patuh,d.dinilai)];}),
@@ -3226,7 +3267,7 @@ function htmlLampiranObservasi(r,kode){
       (adaKeg?'<th rowspan="2">Kegiatan</th>':'')+'<th colspan="'+F.length+'" class="otb-c">'+satuan+'</th>'+
       '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(kode==='APD'?'Temuan':'Keterangan')+'</th></tr><tr>'+
       F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
-      R.map(function(o,n){return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(fmtID(o.tanggal))+'</td><td>'+esc(o.ruangan)+'</td><td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi||'-')+'</td>'+
+      R.map(function(o,n){return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(fmtID(o.tanggal))+'</td><td>'+esc(o.ruangan)+'</td><td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
         (adaKeg?'<td>'+esc(o.kegiatan||'-')+'</td>':'')+F.map(function(f){return sim[_nilaiObs(o,f)];}).join('')+
         '<td class="otb-c"><span class="otb-status '+(o.kepatuhan==='Patuh'?'ya':'tidak')+'">'+esc(o.kepatuhan)+'</span></td>'+
         '<td class="otb-ket">'+(o.catatan?esc(o.catatan):'<span class="muted">-</span>')+'</td></tr>';}).join('')+
@@ -3246,7 +3287,7 @@ function kontenLampiranObservasi(r,kode){
   var h2=[{},{},{},{},{}]; if(adaKeg)h2.push({}); F.forEach(function(f,i){h2.push(String(i+1));}); h2.push({},{});
   var sel={ya:{text:'P',alignment:'center',color:'#2f7a12',bold:true},tidak:{text:'TP',alignment:'center',color:'#b0331f',bold:true,fillColor:'#FBE3DE'},na:{text:'–',alignment:'center',color:'#9aa6b0'}};
   var rows=R.map(function(o,i){
-    var b=[i+1,fmtID(o.tanggal),o.ruangan,o.nama_petugas,o.profesi||'-']; if(adaKeg)b.push(o.kegiatan||'-');
+    var b=[i+1,fmtID(o.tanggal),o.ruangan,o.nama_petugas,o.profesi?normProfesi(o.profesi):'-']; if(adaKeg)b.push(o.kegiatan||'-');
     F.forEach(function(f){b.push(Object.assign({},sel[_nilaiObs(o,f)]));});
     b.push({text:o.kepatuhan,alignment:'center',bold:true,color:o.kepatuhan==='Patuh'?'#2f7a12':'#b0331f'},o.catatan||'-');
     return b;
@@ -3492,9 +3533,34 @@ function ppiPDF(opts){
     });
   }).catch(function(e){toast('Gagal membuat PDF: '+((e&&e.message)||e),'err');});
 }
+/* Gambar diagram batang di kanvas tersembunyi -> gambar PNG (untuk PDF dari data server). */
+function tungguChartJs(){return new Promise(function(ok,gagal){var n=0;(function c(){if(window.Chart)return ok();if(++n>100)return gagal(new Error('Pustaka grafik gagal dimuat.'));setTimeout(c,100);})();});}
+function gambarBatang(g){
+  return tungguChartJs().then(function(){
+    var cv=document.createElement('canvas'); cv.width=1000; cv.height=420;
+    cv.style.cssText='position:fixed;left:-20000px;top:0;width:1000px;height:420px'; document.body.appendChild(cv);
+    var banyak=(g.seri||[]).length>0;
+    var ch=new Chart(cv.getContext('2d'),{type:'bar',data:{labels:g.labels,datasets:(g.seri||[]).map(function(s,i){
+        return {label:s.label,data:s.data,backgroundColor:WARNA_SERI[i%WARNA_SERI.length],borderRadius:3,maxBarThickness:46};})},
+      plugins:[labelNilaiBatang],
+      options:{responsive:false,animation:false,devicePixelRatio:2,layout:{padding:{top:20}},
+        plugins:{labelNilai:{persen:g.persen,ukuran:12},legend:{display:banyak,position:'bottom',labels:{boxWidth:12,font:{size:13}}}},
+        scales:{y:{beginAtZero:true,max:g.persen?100:undefined,ticks:{precision:0,font:{size:12},callback:function(v){return g.persen?v+'%':v;}},grid:{color:'#E4ECEA'}},
+          x:{grid:{display:false},ticks:{autoSkip:false,maxRotation:40,font:{size:12}}}}}});
+    var url=cv.toDataURL('image/png'); ch.destroy(); cv.remove(); return url;
+  });
+}
 /* Dipanggil halaman tambahan (Rekap Data Pasien, Bundle): data tabel dari server -> PDF. */
 function ppiPDFData(r){
-  var konten=[];
+  var G=r.grafik||[];
+  return Promise.all(G.map(function(g){return gambarBatang(g).catch(function(){return null;});})).then(function(img){
+  var konten=[], lebar=(r.orientasi==='portrait'?595:842)-72;
+  G.forEach(function(g,i){
+    if(!img[i])return;
+    konten.push({unbreakable:true,stack:[{text:g.judul,bold:true,fontSize:10.5,margin:[0,6,0,4]},
+      {table:{widths:['*'],body:[[{image:img[i],fit:[lebar-12,r.orientasi==='portrait'?230:200],alignment:'center',margin:[0,4,0,4]}]]},layout:fGaris()},
+      {text:'Gambar '+(i+1)+'. '+(g.keterangan||g.judul),fontSize:8.5,italics:true,alignment:'center',margin:[0,3,0,8]}]});
+  });
   (r.tabel||[]).forEach(function(t){
     if(t.judul)konten.push({text:t.judul,bold:true,fontSize:10.5,margin:[0,6,0,4]});
     var n=t.head.length;
@@ -3507,6 +3573,7 @@ function ppiPDFData(r){
   });
   if(r.catatan)konten.push({text:r.catatan,fontSize:8.5,italics:true});
   return ppiPDF({judul:r.judul,sub:r.sub,konten:konten,orientasi:r.orientasi||'landscape',namaFile:r.nama_file});
+  });
 }
 
 </script>
