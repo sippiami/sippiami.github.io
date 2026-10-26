@@ -545,6 +545,11 @@
   .otb-ket-bawah{margin-top:10px;font-size:12px;color:#5b6b78}.otb-ket-bawah ol{margin:4px 0 0 18px;padding:0;columns:2;column-gap:24px}
   @media(max-width:640px){.otb-ket-bawah ol{columns:1}}
   .otb tr.otb-jml td{background:#f2f4f6;font-weight:700}
+  .cek-pribadi{display:flex;gap:8px;align-items:center;margin:2px 0 14px;font-size:13px;cursor:pointer}.cek-pribadi input{width:auto;margin:0}
+  .idle-layar{position:fixed;inset:0;z-index:10001;background:rgba(10,30,45,.55);display:grid;place-items:center;padding:16px}
+  .idle-kotak{background:#fff;border-radius:16px;padding:22px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+  .idle-kotak h3{margin:0 0 8px}.idle-kotak p{margin:0 0 16px;font-size:14px;line-height:1.5}.idle-kotak b{color:var(--danger,#c0392b);font-size:16px}
+  .idle-aksi{display:flex;gap:8px;justify-content:flex-end}
 </style>
   <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -560,7 +565,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.10.21';
+var VERSI_TAMPILAN='2026.10.21.2';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -649,8 +654,9 @@ window.addEventListener('DOMContentLoaded',function(){
     tampilMemuat();
     call('meProfil',S.token).then(function(u){
       if(!u)throw 0;
-      S.user=u; renderApp(); go(defaultView());
-    }).catch(function(){ S.token=null; try{localStorage.removeItem('sippi_token');}catch(e){} renderLogin(); });
+      S.user=u; renderApp(); go(defaultView()); mulaiPantauAktivitas();
+    }).catch(function(){ S.token=null; try{localStorage.removeItem('sippi_token');}catch(e){} renderLogin();
+      var m=$('#loginMsg'); if(m)m.innerHTML='<span class="muted">Sesi sebelumnya sudah berakhir. Silakan masuk lagi.</span>'; });
   } else { renderLogin(); }
 });
 /* Halaman verifikasi tanda tangan QR (publik, tanpa login) di alamat baru. */
@@ -722,6 +728,7 @@ function renderLogin(){
       '<h2>Masuk</h2><div class="sub">Gunakan akun yang diberikan Admin IT.</div>'+
       '<div class="field"><label>Username</label><input id="u" autocomplete="username" placeholder="mis. komite"></div>'+
       '<div class="field"><label>Password</label><input id="p" type="password" autocomplete="current-password" placeholder="••••••••"></div>'+
+      '<label class="cek-pribadi"><input type="checkbox" id="pribadi"'+(_pribadi()?' checked':'')+'> Ini perangkat pribadi saya <span class="muted">(tetap masuk lebih lama)</span></label>'+
       '<button class="btn" id="btnLogin" style="width:100%;justify-content:center">Masuk</button>'+
       '<div class="small muted mt" id="loginMsg"></div>'+
     '</div></div>'+
@@ -734,11 +741,13 @@ function doLogin(){
   var u=$('#u').value.trim(), p=$('#p').value;
   if(!u||!p){$('#loginMsg').textContent='Isi username dan password.';return;}
   var btn=$('#btnLogin'); btn.disabled=true; btn.textContent='Memeriksa…';
-  call('login',u,p).then(function(r){
+  var pribadi=$('#pribadi').checked;
+  call('login',u,p,pribadi).then(function(r){
     btn.disabled=false; btn.textContent='Masuk';
     if(!r.ok){$('#loginMsg').innerHTML='<span style="color:var(--danger)">'+esc(r.pesan)+'</span>';return;}
     S.token=r.token; S.user=r.user; localStorage.setItem('sippi_token',r.token);
-    renderApp(); go(defaultView());
+    try{localStorage.setItem('sippi_pribadi',pribadi?'1':'0');}catch(e){}
+    renderApp(); go(defaultView()); mulaiPantauAktivitas();
   }).catch(function(){btn.disabled=false;btn.textContent='Masuk';$('#loginMsg').textContent='Gagal terhubung. Coba lagi.';});
 }
 
@@ -770,6 +779,57 @@ function menuFor(role){
     {id:'cek',t:'Cek Sistem',ic:'cek'}
   ];
 }
+/* ===== Keluar otomatis bila tidak ada aktivitas =====
+   Komputer bersama: 30 menit. Perangkat pribadi (dicentang saat login): 12 jam.
+   60 detik sebelum keluar muncul peringatan dengan tombol "Tetap masuk". */
+var IDLE_MENIT={bersama:30,pribadi:720}, _idle={aktif:Date.now(),timer:null,peringatan:null};
+function _pribadi(){try{return localStorage.getItem('sippi_pribadi')==='1';}catch(e){return false;}}
+function _batasIdle(){return (_pribadi()?IDLE_MENIT.pribadi:IDLE_MENIT.bersama)*60000;}
+function _catatAktif(){_idle.aktif=Date.now();}
+function mulaiPantauAktivitas(){
+  hentikanPantauAktivitas(); _idle.aktif=Date.now(); _idle.ping=Date.now();
+  ['click','keydown','touchstart','scroll','input'].forEach(function(ev){document.addEventListener(ev,_catatAktif,{passive:true,capture:true});});
+  document.addEventListener('mousemove',_gerakMouse,{passive:true});
+  document.addEventListener('visibilitychange',_cekIdle);
+  _idle.timer=setInterval(_cekIdle,5000);
+}
+var _mouseTerakhir=0;function _gerakMouse(){var t=Date.now();if(t-_mouseTerakhir>15000){_mouseTerakhir=t;_catatAktif();}}
+function hentikanPantauAktivitas(){
+  if(_idle.timer)clearInterval(_idle.timer); _idle.timer=null; _tutupPeringatanIdle();
+  ['click','keydown','touchstart','scroll','input'].forEach(function(ev){document.removeEventListener(ev,_catatAktif,{capture:true});});
+  document.removeEventListener('mousemove',_gerakMouse); document.removeEventListener('visibilitychange',_cekIdle);
+}
+function _cekIdle(){
+  if(!S.token||!S.user)return;
+  var kini=Date.now(), sisa=_batasIdle()-(kini-_idle.aktif);
+  if(kini-_idle.aktif<60000 && kini-(_idle.ping||0)>300000){_idle.ping=kini; call('meProfil',S.token).then(function(u){if(!u)keluarOtomatis(true);}).catch(function(){});}
+  if(sisa<=0){keluarOtomatis();return;}
+  if(sisa<=60000)_tampilPeringatanIdle(sisa); else _tutupPeringatanIdle();
+}
+function _tampilPeringatanIdle(sisa){
+  var d=_idle.peringatan;
+  if(!d){
+    d=_idle.peringatan=document.createElement('div'); d.className='idle-layar';
+    d.innerHTML='<div class="idle-kotak"><h3>Masih di sini?</h3><p>Tidak ada aktivitas cukup lama. Demi keamanan data pasien, SIPPI akan keluar otomatis dalam <b id="idleDetik">60</b> detik.</p>'+
+      '<div class="idle-aksi"><button class="btn ghost" id="idleKeluar">Keluar sekarang</button><button class="btn" id="idleTetap">Tetap masuk</button></div></div>';
+    document.body.appendChild(d);
+    d.querySelector('#idleTetap').onclick=function(){_idle.aktif=Date.now();_tutupPeringatanIdle();call('meProfil',S.token).then(function(u){if(!u)keluarOtomatis(true);}).catch(function(){});};
+    d.querySelector('#idleKeluar').onclick=function(){hentikanPantauAktivitas();var t=S.token;S.token=null;S.user=null;try{localStorage.removeItem('sippi_token');}catch(e){}call('logout',t).catch(function(){});renderLogin();};
+    clearInterval(_idle.timer); _idle.timer=setInterval(_cekIdle,1000);
+  }
+  var el=d.querySelector('#idleDetik'); if(el)el.textContent=Math.max(0,Math.ceil(sisa/1000));
+}
+function _tutupPeringatanIdle(){
+  if(_idle.peringatan){_idle.peringatan.remove();_idle.peringatan=null; if(_idle.timer){clearInterval(_idle.timer);_idle.timer=setInterval(_cekIdle,5000);}}
+}
+function keluarOtomatis(dariServer){
+  var t=S.token; hentikanPantauAktivitas(); S.token=null; S.user=null; closeModal();
+  try{localStorage.removeItem('sippi_token');}catch(e){}
+  if(t)call('logout',t).catch(function(){});
+  renderLogin();
+  var m=$('#loginMsg'); if(m)m.innerHTML='<span style="color:var(--danger)">'+(dariServer?'Sesi berakhir. Silakan masuk lagi.':
+    'Anda keluar otomatis karena tidak ada aktivitas selama '+(_pribadi()?'12 jam':'30 menit')+'. Silakan masuk lagi.')+'</span>';
+}
 function bukaMenu(){$('#side').classList.add('open');var t=$('#sideTirai');if(t)t.classList.add('on');}
 function tutupMenu(){var sd=$('#side');if(sd)sd.classList.remove('open');var t=$('#sideTirai');if(t)t.classList.remove('on');}
 document.addEventListener('keydown',function(e){if(e.key==='Escape')tutupMenu();});
@@ -800,7 +860,7 @@ function renderApp(){
     '</main>'+
   '</div>';
   $all('#nav a[data-v]').forEach(function(a){a.onclick=function(){go(a.getAttribute('data-v'));};});
-  $('#btnLogout').onclick=function(){ call('logout',S.token); localStorage.removeItem('sippi_token'); S.token=null;S.user=null; renderLogin(); };
+  $('#btnLogout').onclick=function(){ hentikanPantauAktivitas(); call('logout',S.token); localStorage.removeItem('sippi_token'); S.token=null;S.user=null; renderLogin(); };
   $('#mBtn').onclick=function(){$('#side').classList.contains('open')?tutupMenu():bukaMenu();};
   $('#sideTutup').onclick=tutupMenu;
   $('#sideTirai').onclick=tutupMenu;
