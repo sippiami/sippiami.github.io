@@ -568,7 +568,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.10.26.3';
+var VERSI_TAMPILAN='2026.10.26.4';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -2153,7 +2153,7 @@ function renderLaporanObservasi(area,r,kode){
 
   var barisChart=r.itemChart.map(function(x){
     return '<div class="t small" style="display:flex;justify-content:space-between;padding:2px 0">'+
-      '<span>'+esc(x.label)+'</span><span class="muted">'+(x.persen===null?'N/A':x.persen+'%')+' ('+x.patuh+'/'+x.total+')</span></div>';
+      '<span>'+esc(x.label)+(x.peluang===false?' <span class="small muted">(tidak dihitung sebagai peluang)</span>':'')+'</span><span class="muted">'+(x.persen===null?'N/A':x.persen+'%')+' ('+x.patuh+'/'+x.total+')</span></div>';
   }).join('');
 
   var barisA=r.formA.map(function(x){
@@ -2182,7 +2182,9 @@ function renderLaporanObservasi(area,r,kode){
       '<div class="field"><label>Target</label><input value="'+esc(r.formB.target)+'" disabled></div>'+
       '<div class="field"><label>Hasil Capaian</label><input value="'+esc(r.formB.hasil_capaian)+'" disabled></div></div>'+
       '<div class="field"><label>Kesimpulan</label><textarea rows="2" disabled>'+esc(r.formB.kesimpulan)+'</textarea></div>'+
-      '<div class="field"><label>Analisa Hasil Capaian</label><textarea id="fbAnalisa" rows="4" placeholder="Tulis analisa capaian bulan ini...">'+esc(r.formB.analisa)+'</textarea></div>'+
+      '<div class="field"><label>Analisa Hasil Capaian</label>'+
+        (r.formB.analisa_draf&&r.formB.analisa?'<div class="badge warn" style="display:block;white-space:normal;margin-bottom:6px">Draf otomatis dari data bulan ini. Periksa, lengkapi bagian "(lengkapi)", lalu klik Simpan Form B.</div>':'')+
+        '<textarea id="fbAnalisa" rows="'+(r.formB.analisa?12:4)+'" placeholder="Tulis analisa capaian bulan ini...">'+esc(r.formB.analisa)+'</textarea></div>'+
       '<div class="field"><label>Rekomendasi Tindak Lanjut</label><textarea id="fbRekomendasi" rows="4" placeholder="Tulis rekomendasi tindak lanjut...">'+esc(r.formB.rekomendasi)+'</textarea></div>'+
       '<div class="row"><button class="btn teal" id="fbSimpan">Simpan Form B</button>'+
       '<button class="btn" id="obsPdf">Unduh PDF</button></div></div>';
@@ -2229,6 +2231,9 @@ function renderObsStep1(area){
     '<div><label>Kegiatan</label><select id="obsKegiatan">'+sv.kegiatan.map(function(k){return '<option value="'+esc(k)+'"'+(id.kegiatanPilih===k?' selected':'')+'>'+esc(k)+'</option>';}).join('')+'</select></div>'+
     '<div id="obsKegiatanLainWrap" style="display:none"><label>Kegiatan lainnya</label><input id="obsKegiatanLain" placeholder="Tulis kegiatan"></div>'
     :'';
+  var KW=sv.kewaspadaan||(st.kode==='APD'?['Kontak','Droplet','Airborne']:null);
+  if(KW)kegiatanHTML+='<div><label>Kewaspadaan transmisi</label><select id="obsKewaspadaan"><option value="">– Tidak ada / standar</option>'+
+    KW.map(function(k){return '<option>'+esc(k)+'</option>';}).join('')+'</select></div>';
   if(id.profesi)id.profesi=normProfesi(id.profesi);
   var profesi=DAFTAR_PROFESI, profLain=id.profesi&&profesi.indexOf(id.profesi)<0;
   var item=sv.fields.map(function(f,i){
@@ -2335,6 +2340,7 @@ function renderObsStep1(area){
       survei_id:sv.survei_id, ruangan_id:st.identitas.ruangan_id, tanggal:st.identitas.tanggal,
       nama_petugas:$('#obsNama').value.trim(), profesi:st.identitas.profesi,
       kegiatan:sv.kegiatan?(kegPilih==='Lainnya'?$('#obsKegiatanLain').value.trim():kegPilih):'',
+      kewaspadaan:$('#obsKewaspadaan')?$('#obsKewaspadaan').value:'',
       jawaban:jawaban, catatan:$('#obsCatatan').value.trim(), foto:st.foto.slice()
     };
     btn.disabled=true; btn.textContent='Mengunggah foto & menyimpan…';
@@ -2365,7 +2371,7 @@ function loadObsLog(){
         '<tr>'+F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
       list.map(function(o,n){
         return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td><td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
-          (st.sv.kegiatan?'<td>'+esc(o.kegiatan||'-')+'</td>':'')+
+          (st.sv.kegiatan?'<td>'+esc(_kegTeks(o))+'</td>':'')+
           F.map(function(f){return simbol(o,f);}).join('')+
           '<td class="otb-c"><span class="otb-status '+(o.kepatuhan==='Patuh'?'ya':'tidak')+'">'+esc(o.kepatuhan)+'</span></td>'+
           '<td class="otb-ket">'+(o.catatan?esc(o.catatan):'<span class="muted">-</span>')+'</td>'+
@@ -3204,8 +3210,8 @@ function hitungPerProfesi(r){
   (r.rincian||[]).forEach(function(o){
     var p=normProfesi(o.profesi), d=peta[p]=peta[p]||{profesi:p,obs:0,obsPatuh:0,dinilai:0,patuh:0,item:{}};
     d.obs++; if(o.kepatuhan==='Patuh')d.obsPatuh++;
-    F.forEach(function(f){var s=_nilaiObs(o,f); if(s==='na')return;
-      var it=d.item[f.field_id]=d.item[f.field_id]||{dinilai:0,patuh:0}; it.dinilai++; d.dinilai++; if(s==='ya'){it.patuh++;d.patuh++;}});
+    F.forEach(function(f){var s=_nilaiObs(o,f); if(s==='na')return; var pl=_fieldPeluang(f);
+      var it=d.item[f.field_id]=d.item[f.field_id]||{dinilai:0,patuh:0}; it.dinilai++; if(pl)d.dinilai++; if(s==='ya'){it.patuh++;if(pl)d.patuh++;}});
   });
   var list=Object.keys(peta).map(function(k){return peta[k];});
   list.sort(function(a,b){var ia=URUT.indexOf(a.profesi),ib=URUT.indexOf(b.profesi);return (ia<0?9:ia)-(ib<0?9:ib)||a.profesi.localeCompare(b.profesi);});
@@ -3231,7 +3237,8 @@ function htmlPerProfesi(r,kode){
   return '<div class="card card-pad mb"><h3>Kepatuhan per Profesi</h3>'+
     '<h3 class="mb small">Diagram Batang — % Kepatuhan per Profesi</h3><div class="chart-prof"><canvas id="lpChartProf"></canvas></div>'+
     (kode==='HH'?'<h3 class="mt mb small">Diagram Batang — % Kepatuhan tiap Momen per Profesi</h3><div class="chart-prof tinggi"><canvas id="lpChartProfMomen"></canvas></div>':'')+
-    '<div class="desc mb mt">Peluang dinilai = jumlah '+satuan+' yang dinilai (tanpa N/A). % kepatuhan = patuh ÷ peluang dinilai.</div>'+
+    '<div class="desc mb mt">Peluang dinilai = jumlah '+satuan+' yang dinilai (tanpa N/A). % kepatuhan = patuh ÷ peluang dinilai.'+
+      (kode==='HH'?' "6 Langkah Cuci Tangan" tetap dicatat dan ditampilkan, tetapi tidak dihitung sebagai peluang (sesuai Form A).':'')+'</div>'+
     '<div class="table-scroll">'+t1+'</div><h3 class="mt mb small">Rincian per '+satuan+'</h3><div class="table-scroll">'+t2+'</div>'+
     '<div class="otb-ket-bawah">'+(kode==='HH'?'Momen':'Item')+': '+F.map(function(f,i){return (i+1)+'. '+esc(f.label);}).join(' · ')+'</div></div>';
 }
@@ -3282,26 +3289,29 @@ function kontenPerProfesi(r,kode,huruf){
     k.push(fTabel([h1,h2],semua.map(function(d){return [d.profesi].concat(F.map(function(f){var it=d.item[f.field_id];
       return it?_persen(it.patuh,it.dinilai)+'\n('+it.patuh+'/'+it.dinilai+')':'-';}));}),
       {kiri:[0],tebal:function(x){return x[0]==='JUMLAH';},widths:[70].concat(F.map(function(){return '*';})),font:F.length>8?6.5:8}));
-    k.push(fCatatan('Peluang dinilai = jumlah '+satuan.toLowerCase()+' yang dinilai (tanpa N/A). '+satuan+': '+F.map(function(f,i){return (i+1)+'. '+f.label;}).join('; ')+'.'));
+    k.push(fCatatan('Peluang dinilai = jumlah '+satuan.toLowerCase()+' yang dinilai (tanpa N/A)'+(kode==='HH'?'; 6 langkah cuci tangan tidak dihitung sebagai peluang':'')+'. '+satuan+': '+F.map(function(f,i){return (i+1)+'. '+f.label;}).join('; ')+'.'));
   }
   return k;
 }
 /* ===== Lampiran Laporan Bulanan HH/APD: rincian tiap observasi per petugas ===== */
+function _kegTeks(o){return [o.kegiatan,o.kewaspadaan?'Kewaspadaan '+o.kewaspadaan:''].filter(Boolean).join(' · ')||'-';}
+/* HH: hanya 5 momen yang dihitung sebagai peluang; "6 langkah cuci tangan" dicatat terpisah. */
+function _fieldPeluang(f){return f.peluang!==false&&!/6\s*langkah/i.test(f.label||'');}
 function _nilaiObs(o,f){var v=(o.nilai||{})[f.field_id],neg=(f.opsi&&f.opsi[1])||'Tidak Patuh';return !v?'na':(v===neg?'tidak':'ya');}
 var PESAN_SERVER_LAMA='<div class="badge warn" style="display:block;padding:10px 12px;white-space:normal">Bagian ini memerlukan Kode.gs terbaru. Pasang Kode.gs terbaru di Apps Script, lalu Kelola deployment → Versi baru.</div>';
 function htmlLampiranObservasi(r,kode){
   if(!r.fields||!r.rincian)return '<div class="card card-pad mb"><h3>Lampiran — Rincian Observasi per Petugas</h3>'+PESAN_SERVER_LAMA+'</div>';
-  var F=r.fields||[], R=r.rincian||[], adaKeg=R.some(function(o){return o.kegiatan;}), satuan=kode==='HH'?'Momen':'Item';
+  var F=r.fields||[], R=r.rincian||[], adaKeg=R.some(function(o){return o.kegiatan||o.kewaspadaan;}), satuan=kode==='HH'?'Momen':'Item';
   var sim={ya:'<td class="otb-n ya">✓</td>',tidak:'<td class="otb-n tidak">✗</td>',na:'<td class="otb-n na">–</td>'};
   return '<div class="card card-pad mb"><h3>Lampiran — Rincian Observasi per Petugas</h3>'+
     '<div class="desc mb">'+R.length+' observasi selama '+esc(r.namaBulan)+' '+r.tahun+'. Ikut tercetak sebagai lampiran PDF.</div>'+
     (R.length?'<div class="table-scroll"><table class="otb"><thead><tr>'+
       '<th rowspan="2" class="otb-c">No</th><th rowspan="2" class="otb-c">Tanggal</th><th rowspan="2">Ruang</th><th rowspan="2">Nama Petugas</th><th rowspan="2">Profesi</th>'+
-      (adaKeg?'<th rowspan="2">Kegiatan</th>':'')+'<th colspan="'+F.length+'" class="otb-c">'+satuan+'</th>'+
+      (adaKeg?'<th rowspan="2">Kegiatan'+(kode==='APD'?' / Kewaspadaan':'')+'</th>':'')+'<th colspan="'+F.length+'" class="otb-c">'+satuan+'</th>'+
       '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(kode==='APD'?'Temuan':'Keterangan')+'</th></tr><tr>'+
       F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
       R.map(function(o,n){return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(fmtID(o.tanggal))+'</td><td>'+esc(o.ruangan)+'</td><td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
-        (adaKeg?'<td>'+esc(o.kegiatan||'-')+'</td>':'')+F.map(function(f){return sim[_nilaiObs(o,f)];}).join('')+
+        (adaKeg?'<td>'+esc(_kegTeks(o))+'</td>':'')+F.map(function(f){return sim[_nilaiObs(o,f)];}).join('')+
         '<td class="otb-c"><span class="otb-status '+(o.kepatuhan==='Patuh'?'ya':'tidak')+'">'+esc(o.kepatuhan)+'</span></td>'+
         '<td class="otb-ket">'+(o.catatan?esc(o.catatan):'<span class="muted">-</span>')+'</td></tr>';}).join('')+
       '</tbody></table></div>'+
@@ -3310,17 +3320,17 @@ function htmlLampiranObservasi(r,kode){
 }
 function kontenLampiranObservasi(r,kode){
   if(!r.fields||!r.fields.length||!r.rincian)return [];   // Kode.gs lama: lampiran dilewati agar PDF tetap jadi
-  var F=r.fields||[], R=r.rincian||[], adaKeg=R.some(function(o){return o.kegiatan;}), n=F.length;
+  var F=r.fields||[], R=r.rincian||[], adaKeg=R.some(function(o){return o.kegiatan||o.kewaspadaan;}), n=F.length;
   var k=[fJudul('','LAMPIRAN — Rincian Observasi per Petugas','landscape'),
     fCatatan(R.length+' observasi · '+r.namaBulan+' '+r.tahun+(kode==='HH'?' · Kepatuhan Kebersihan Tangan':' · Kepatuhan Penggunaan APD'))];
   var h1=[{text:'No',rowSpan:2},{text:'Tanggal',rowSpan:2},{text:'Ruang',rowSpan:2},{text:'Nama Petugas',rowSpan:2},{text:'Profesi',rowSpan:2}];
-  if(adaKeg)h1.push({text:'Kegiatan',rowSpan:2});
+  if(adaKeg)h1.push({text:'Kegiatan'+(kode==='APD'?' / Kewaspadaan':''),rowSpan:2});
   h1.push({text:kode==='HH'?'Momen':'Item',colSpan:n}); for(var i=1;i<n;i++)h1.push({});
   h1.push({text:'Kepatuhan',rowSpan:2},{text:kode==='APD'?'Temuan':'Keterangan',rowSpan:2});
   var h2=[{},{},{},{},{}]; if(adaKeg)h2.push({}); F.forEach(function(f,i){h2.push(String(i+1));}); h2.push({},{});
   var sel={ya:{text:'P',alignment:'center',color:'#2f7a12',bold:true},tidak:{text:'TP',alignment:'center',color:'#b0331f',bold:true,fillColor:'#FBE3DE'},na:{text:'–',alignment:'center',color:'#9aa6b0'}};
   var rows=R.map(function(o,i){
-    var b=[i+1,fmtID(o.tanggal),o.ruangan,o.nama_petugas,o.profesi?normProfesi(o.profesi):'-']; if(adaKeg)b.push(o.kegiatan||'-');
+    var b=[i+1,fmtID(o.tanggal),o.ruangan,o.nama_petugas,o.profesi?normProfesi(o.profesi):'-']; if(adaKeg)b.push(_kegTeks(o));
     F.forEach(function(f){b.push(Object.assign({},sel[_nilaiObs(o,f)]));});
     b.push({text:o.kepatuhan,alignment:'center',bold:true,color:o.kepatuhan==='Patuh'?'#2f7a12':'#b0331f'},o.catatan||'-');
     return b;
@@ -3336,7 +3346,8 @@ function kontenLaporanObservasi(r,kode){
   k.push(fJudul('A','Grafik Kepatuhan per '+satuan));
   k=k.concat(fGambar('lpChartObs','Persentase kepatuhan per '+satuan.toLowerCase()+', '+r.namaBulan+' '+r.tahun,lebar,210));
   k.push(fJudul('B','Rincian Kepatuhan per '+satuan));
-  k.push(fTabel(['No',satuan,'Patuh','Diamati','Kepatuhan'],r.itemChart.map(function(x,i){return [i+1,x.label,x.patuh,x.total,x.persen===null?'N/A':x.persen+'%'];}),{kiri:[1],widths:[22,'*',50,50,60]}));
+  k.push(fTabel(['No',satuan,'Patuh','Diamati','Kepatuhan'],r.itemChart.map(function(x,i){return [i+1,x.label+(x.peluang===false?' *':''),x.patuh,x.total,x.persen===null?'N/A':x.persen+'%'];}),{kiri:[1],widths:[22,'*',50,50,60]}));
+  if(r.itemChart.some(function(x){return x.peluang===false;}))k.push(fCatatan('* Dicatat terpisah, tidak dihitung sebagai peluang kebersihan tangan (peluang = 5 momen).'));
   k=k.concat(kontenPerProfesi(r,kode,'C'));
   k.push(fJudul('D','Form A — Sensus Harian Indikator Mutu'));
   var rows=r.formA.map(function(x,i){return [i+1,x.ruang,x.total,x.peluang,x.capaian===null?'N/A':x.capaian+'%'];});
