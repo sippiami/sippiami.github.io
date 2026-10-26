@@ -153,7 +153,7 @@
   .btn:active{transform:translateY(1px)}
   .btn.ghost{background:#fff;color:var(--blue);border-color:var(--line);box-shadow:var(--shadow)}
   .btn.ghost:hover{background:var(--blue-050);border-color:#C9DCEC;filter:none}
-  .btn.ghost.danger{color:var(--danger)}
+  .btn.ghost.danger{color:var(--danger);background:#fff;border-color:#F0B8AC;box-shadow:var(--shadow)}
   .btn.ghost.danger:hover{background:#FADFD9;border-color:#F0B8AC}
   .btn.teal{background:linear-gradient(180deg,#8CC63F,var(--green-600));color:#153608;box-shadow:0 6px 16px rgba(95,154,31,.3)}
   .btn.danger{background:linear-gradient(180deg,#E0664F,var(--danger));box-shadow:0 6px 16px rgba(213,80,58,.28)}
@@ -551,6 +551,8 @@
   .idle-kotak h3{margin:0 0 8px}.idle-kotak p{margin:0 0 16px;font-size:14px;line-height:1.5}.idle-kotak b{color:var(--danger,#c0392b);font-size:16px}
   .idle-aksi{display:flex;gap:8px;justify-content:flex-end}
   .chart-prof{position:relative;height:240px}.chart-prof.tinggi{height:300px}
+  .chart-capaian{position:relative;height:320px;width:100%}
+  @media(max-width:700px){.chart-capaian{height:360px}}
 </style>
   <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -566,7 +568,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.10.26.2';
+var VERSI_TAMPILAN='2026.10.26.3';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -974,24 +976,13 @@ function muatSatuAnalisisPerawat(surveiId, surveiNama){
 
     // ---- Analisis TIAP TINDAKAN: total masing-masing selama sebulan ----
     var kolomTindakan=r.kolom.filter(function(k){return k.tipe==='denominator'||k.tipe==='number';});
-    var tindakanHTML=kolomTindakan.length ? '<div class="rate-grid mb">'+kolomTindakan.map(function(k){
-      return '<div class="rate"><div class="r-lbl">'+esc(k.label)+'</div>'+
-        '<div class="r-val tnum">'+(r.total[k.field_id]||0)+'<span class="u">tindakan</span></div>'+
-        '<div class="r-form">Total sebulan ini ('+r.baris.length+' hari terisi)</div></div>';
-    }).join('')+'</div>' : '';
+    var tindId='cvTindP_'+surveiId, kejId='cvKejP_'+surveiId;
+    var tindakanHTML=kolomTindakan.length ? '<div class="chart-capaian"><canvas id="'+tindId+'"></canvas></div>'+
+      '<div class="small muted mt">Total sebulan ini ('+r.baris.length+' hari terisi).</div>' : '';
 
     // ---- Analisis TIAP KEJADIAN: jumlah + rate/kasus + status capaian ----
-    var kejadianHTML=r.rate.length ? '<div class="rate-grid mb">'+r.rate.map(function(x){
-      var baik=x.numerator===0;
-      var badge=baik
-        ? '<span class="badge ok">Baik — tidak ada kejadian</span>'
-        : '<span class="badge danger">Perlu perhatian</span>';
-      var rumusTxt=x.pasangan_field_id?(esc(x.rumus)+' — '+esc(x.pasangan)):esc(x.rumus);
-      return '<div class="rate"><div class="r-lbl">'+esc(x.label)+'</div>'+
-        '<div class="r-val tnum">'+x.nilai+'<span class="u">'+esc(x.satuan)+'</span></div>'+
-        '<div class="r-form">'+rumusTxt+'</div>'+
-        '<div class="mt">'+badge+'</div></div>';
-    }).join('')+'</div>' : '';
+    var kejadianHTML=r.rate.length ? '<div class="chart-capaian"><canvas id="'+kejId+'"></canvas></div>'+
+      '<div class="small muted mt">Batang biru = jumlah tindakan, merah = jumlah kejadian. Nilai capaian dan statusnya tertulis di bawah nama indikator.</div>' : '';
 
     // ---- Ringkasan naratif ----
     var adaKejadian=r.rate.filter(function(x){return x.numerator>0;});
@@ -1012,12 +1003,46 @@ function muatSatuAnalisisPerawat(surveiId, surveiNama){
           '<b style="color:var(--ink)">Analisis:</b> '+narasi+
         '</div>'+
       '</div>';
+    if(kolomTindakan.length){var cv=document.getElementById(tindId), op=_opsiJumlah(false), smp=(cv.parentNode.clientWidth||600)<560;
+      if(smp){op.indexAxis='y';op.layout.padding={right:24};op.scales={x:{beginAtZero:true,ticks:{precision:0},grid:{color:'#E4ECEA'}},y:{grid:{display:false},ticks:{autoSkip:false,font:{size:10}}}};
+        cv.parentNode.style.height=Math.max(220,kolomTindakan.length*36+50)+'px';}
+      buatChart(cv.getContext('2d'),{type:'bar',data:{labels:kolomTindakan.map(function(k){return smp?labelSingkat(k.label):_pecahLabel(labelSingkat(k.label),14);}),
+        datasets:[{label:'Tindakan',data:kolomTindakan.map(function(k){return r.total[k.field_id]||0;}),backgroundColor:'#1476BE',borderRadius:4,maxBarThickness:44}]},
+        options:op,plugins:[labelNilaiBatang]});}
+    if(r.rate.length)drawCapaianBatang(kejId, r.rate.map(function(x){return {label:x.label,nilai:x.nilai,satuan:x.satuan,
+      kejadian:x.numerator||0,tindakan:x.denominator||0,pembagi:!!x.pasangan_field_id,baik:x.numerator===0};}));
   }).catch(function(e){
     box.innerHTML='<div class="card card-pad"><div class="badge danger">Error</div> <span class="small">Gagal memuat analisis: '+
       esc((e&&e.message)||String(e))+'</span></div>';
   });
 }
 
+/* Diagram batang nilai capaian: tindakan (biru) & kejadian (merah) per indikator;
+   nilai capaian + status ditulis di bawah nama indikator (satuan berbeda-beda: ‰, %, kasus). */
+function _pecahLabel(t,maks){var kata=String(t).split(' '),baris=[''];kata.forEach(function(w){var b=baris[baris.length-1];
+  if(b&&(b+' '+w).length>maks)baris.push(w);else baris[baris.length-1]=b?b+' '+w:w;});return baris;}
+function _opsiJumlah(legend){return {responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
+  plugins:{labelNilai:{ukuran:11},legend:{display:legend,position:'bottom',labels:{boxWidth:10,font:{size:11}}}},
+  scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:'#E4ECEA'}},x:{grid:{display:false},ticks:{autoSkip:false,maxRotation:0,font:{size:11}}}}};}
+function drawCapaianBatang(canvasId,items){
+  var cv=document.getElementById(canvasId); if(!cv||!items.length)return;
+  var sempit=(cv.parentNode.clientWidth||600)<560;   // HP: batang mendatar agar nama indikator tidak bertumpuk
+  var labels=items.map(function(x){
+    var nama=_pecahLabel(labelSingkat(x.label),14), cap=String(x.nilai)+' '+(x.satuan||'').trim();
+    return sempit?[nama.join(' ')+' — '+cap,x.baik?'Baik':'Perlu perhatian']:nama.concat([cap+(x.baik?' · Baik':' · Perlu perhatian')]);});
+  var opsi=_opsiJumlah(true), warnaLbl=function(c){var x=items[c.index];return x&&!x.baik?'#B0331F':'#3f4d59';};
+  if(sempit){
+    opsi.indexAxis='y'; opsi.layout.padding={right:24};
+    opsi.scales={x:{beginAtZero:true,ticks:{precision:0},grid:{color:'#E4ECEA'}},y:{grid:{display:false},ticks:{autoSkip:false,font:{size:10},color:warnaLbl}}};
+    cv.parentNode.style.height=Math.max(260,items.length*58+60)+'px';
+  } else opsi.scales.x.ticks.color=warnaLbl;
+  opsi.plugins.tooltip={callbacks:{title:function(t){var x=items[t[0].dataIndex];return x.label;},
+    afterBody:function(t){var x=items[t[0].dataIndex];return 'Capaian: '+x.nilai+' '+(x.satuan||'')+(x.baik?' (baik)':' (perlu perhatian)');}}};
+  buatChart(cv.getContext('2d'),{type:'bar',data:{labels:labels,datasets:[
+    {label:'Tindakan',data:items.map(function(x){return x.pembagi?x.tindakan:null;}),backgroundColor:'#1476BE',borderRadius:4,maxBarThickness:36},
+    {label:'Kejadian',data:items.map(function(x){return x.kejadian;}),backgroundColor:'#D5503A',borderRadius:4,maxBarThickness:36}]},
+    options:opsi,plugins:[labelNilaiBatang]});
+}
 /* ===== Rekap & Analisis Seluruh Ruangan (Beranda Komite) ===== */
 function muatRekapBerandaKomite(){
   var area=$('#berandaRekapArea'); if(!area)return;
@@ -1043,15 +1068,10 @@ function muatSatuRekapBeranda(surveiId, surveiNama, surveiKode, sudahAda){
     }
 
     // ---- Kartu "Nilai Capaian" tingkat RS (gabungan seluruh ruangan) ----
-    var capaianHTML = r.capaian.length ? '<div class="rate-grid mb">'+r.capaian.map(function(x){
-      var badge = x.status==='BAIK'
-        ? '<span class="badge ok">Baik — tidak ada kejadian</span>'
-        : '<span class="badge danger">Perlu perhatian</span>';
-      return '<div class="rate"><div class="r-lbl">'+esc(x.label)+'</div>'+
-        '<div class="r-val tnum">'+x.nilai+'<span class="u">'+esc(x.satuan)+'</span></div>'+
-        '<div class="r-form">'+x.numerator+' kejadian'+(x.denominator?(' / '+x.denominator+' tindakan'):'')+'</div>'+
-        '<div class="mt">'+badge+'</div></div>';
-    }).join('')+'</div>' : '';
+    var capId='cvCapaian_'+surveiId;
+    var capaianHTML = r.capaian.length ? '<div class="card card-pad mb"><h3 class="mb">Nilai Capaian Tingkat RS — '+esc(bulanTahunID(r.periode))+'</h3>'+
+      '<div class="chart-capaian"><canvas id="'+capId+'"></canvas></div>'+
+      '<div class="small muted mt">Batang biru = jumlah tindakan, merah = jumlah kejadian. Nilai capaian dan statusnya tertulis di bawah nama indikator.</div></div>' : '';
 
     // ---- Ringkasan naratif (analisis singkat), ditaruh DI BAWAH grafik ----
     var burukList=r.capaian.filter(function(x){return x.status!=='BAIK';});
@@ -1081,6 +1101,8 @@ function muatSatuRekapBeranda(surveiId, surveiNama, surveiKode, sudahAda){
       '</div>';
 
     gambarChartBerandaKomite(canvasId, r);
+    drawCapaianBatang(capId, r.capaian.map(function(x){return {label:x.label,nilai:x.nilai,satuan:x.satuan,
+      kejadian:x.numerator||0,tindakan:x.denominator||0,pembagi:!!x.denominator||!/kasus/i.test(x.satuan||''),baik:x.status==='BAIK'};}));
   }).catch(function(e){
     box.innerHTML='<div class="card card-pad"><div class="badge danger">Error</div> <span class="small">Gagal memuat rekap: '+
       esc((e&&e.message)||String(e))+'</span></div>';
@@ -3218,7 +3240,9 @@ var WARNA_SERI=['#1476BE','#2E9D6A','#E0A100','#D5503A','#7B5EA7','#0FA3B1','#8C
 var labelNilaiBatang={id:'labelNilai',afterDatasetsDraw:function(ch,args,opt){
   var c=ch.ctx, persen=opt&&opt.persen, uk=(opt&&opt.ukuran)||10; c.save(); c.font='600 '+uk+'px sans-serif'; c.fillStyle='#33424f'; c.textAlign='center'; c.textBaseline='bottom';
   ch.data.datasets.forEach(function(ds,i){var m=ch.getDatasetMeta(i); if(m.hidden)return;
-    m.data.forEach(function(el,j){var v=ds.data[j]; if(v==null)return; c.fillText((Math.round(v*10)/10)+(persen?'%':''),el.x,el.y-2);});});
+    var dt=ch.options.indexAxis==='y'; if(dt){c.textAlign='left';c.textBaseline='middle';}
+    m.data.forEach(function(el,j){var v=ds.data[j]; if(v==null)return; var t=(Math.round(v*10)/10)+(persen?'%':'');
+      if(dt)c.fillText(t,el.x+4,el.y); else c.fillText(t,el.x,el.y-2);});});
   c.restore();}};
 function _persenAngka(a,b){return b?Math.round(a/b*1000)/10:0;}
 function _opsiPersen(legend){return {responsive:true,maintainAspectRatio:false,animation:false,
