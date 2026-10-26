@@ -553,6 +553,35 @@
   .chart-prof{position:relative;height:240px}.chart-prof.tinggi{height:300px}
   .chart-capaian{position:relative;height:320px;width:100%}
   @media(max-width:700px){.chart-capaian{height:360px}}
+  .lp-page h3.lp-h.mt-lg{margin-top:24px}
+  .lp-embed>.card{box-shadow:none;border:0;padding:0;margin:0;background:transparent}
+  .lp-embed>.card>h3:first-child{display:none}
+  .lp-ta{display:block;width:100%;font:inherit;font-size:12.5px;line-height:1.55;resize:vertical;background:#fff}
+  .lp-formb th{background:var(--blue-050);color:var(--blue-700);font-size:11px;text-align:left}
+  .lp-tabel tr.lp-redup td{color:var(--muted)}
+  .kop-resmi{display:flex;align-items:center;gap:12px;color:#000}
+  .kop-resmi .lp-logo{width:66px;height:66px;flex:none;background-size:contain;background-repeat:no-repeat;background-position:center}
+  .kop-resmi .lp-logo.kiri{background-image:var(--logo-kukar)}
+  .kop-resmi .lp-logo.kanan{background-image:var(--logo)}
+  .kop-teks{flex:1;text-align:center;line-height:1.3;font-family:Arial,Helvetica,sans-serif}
+  .kop-teks .k1{font-size:13px;font-weight:700}.kop-teks .k2{font-size:14px;font-weight:700}
+  .kop-teks .k3{font-size:15.5px;font-weight:700}.kop-teks .k4{font-size:10px;margin-top:1px}
+  .kop-teks .surel{color:#1155CC}
+  .kop-garis{border-top:3px solid #000;border-bottom:1px solid #000;height:3px;margin:8px 0 16px}
+  .judul-resmi{text-align:center;color:#000;margin:0 0 18px;font-family:Arial,Helvetica,sans-serif}
+  .judul-resmi .j1{font-size:15px;font-weight:700;letter-spacing:.02em}.judul-resmi .j2{font-size:12px;margin-top:2px}
+  .lp-sheet .lp-page{color:#000}
+  .lp-sheet .lp-page h3.lp-h{color:#000;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;border-bottom:0;padding-bottom:0}
+  .lp-sheet .lp-tabel thead th,.lp-sheet .lp-formb th{background:#E2EFDA;color:#000;text-transform:none;font-weight:700}
+  .lp-sheet .lp-tabel th,.lp-sheet .lp-tabel td{border-color:#000;border-width:.5px}
+  .lp-sheet .lp-tabel tr.total td{background:#F2F2F2}
+  .lp-subhead{font-size:10.5px;color:#444;text-align:right;margin-bottom:12px;font-family:Arial,Helvetica,sans-serif}
+  .lp-sheet .lp-embed .otb th,.lp-sheet .lp-embed .otb td{border:.5px solid #000!important;color:#000}
+  .lp-sheet .lp-embed .otb thead th{background:#E2EFDA!important;color:#000!important}
+  .lp-sheet .lp-embed .otb{border-radius:0!important;box-shadow:none!important;border-collapse:collapse}
+  .lp-sheet .lp-embed h3{padding-left:0!important;font-size:12.5px;color:#000;font-family:Arial,Helvetica,sans-serif}
+  .lp-sheet .lp-embed h3:before,.lp-sheet h3.lp-h:before{display:none!important}
+  .lp-sheet .lp-sign .blok{color:#000}
 </style>
   <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -1999,9 +2028,13 @@ function viewLaporan(c){
         '<div><label>Survei</label><select id="lpSurvei">'+survei.map(function(s){return '<option value="'+s.survei_id+'">'+esc(s.nama)+'</option>';}).join('')+'</select></div>'+
         '<div><label>Bulan</label><input type="month" id="lpBulan" value="'+curPeriode()+'"></div>'+
         '<div style="align-self:flex-end"><button class="btn" id="lpBuat">Buat Laporan</button></div>'+
-      '</div><div class="desc mt">Laporan 4 halaman siap cetak (PDF): ringkasan capaian, tabel bulanan, daftar kejadian pasien, '+
-      'dan analisis. Anda dapat mengedit/menambahkan narasi sebelum mencetak.</div></div>'+
+      '</div><div class="desc mt" id="lpDesc"></div></div>'+
       '<div id="lpArea"></div>';
+    var descLp=function(){var sv=survei.filter(function(s){return s.survei_id===$('#lpSurvei').value;})[0];
+      $('#lpDesc').textContent=sv&&(sv.kode==='HH'||sv.kode==='APD')
+        ?'Laporan siap cetak (PDF): grafik & rincian per '+(sv.kode==='HH'?'momen':'item')+', kepatuhan per profesi, Form A, Form B (analisa & rekomendasi dapat diedit), dan lampiran per petugas.'
+        :'Laporan siap cetak (PDF): ringkasan capaian, tabel bulanan, daftar kejadian pasien, dan analisis. Anda dapat mengedit/menambahkan narasi sebelum mencetak.';};
+    $('#lpSurvei').onchange=descLp; descLp();
     $('#lpBuat').onclick=function(){
       var sid=$('#lpSurvei').value;
       var sv=survei.filter(function(s){return s.survei_id===sid;})[0];
@@ -2024,28 +2057,18 @@ function loadLaporanBulanan(){
 }
 function renderLaporanBulanan(area,r){
   var periodeLabel=bulanTahunID(r.periode);
-  var subHead='<div style="font-size:10.5px;color:var(--muted);font-family:var(--mono);'+
-    'text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px">'+esc(r.aplikasi)+' &middot; Laporan Bulanan &middot; '+
-    esc(r.survei.nama)+' &middot; '+esc(periodeLabel)+'</div>';
+  var subHead='<div class="lp-subhead">Laporan Bulanan '+esc(r.survei.nama)+' — Bulan '+esc(bulanPanjangID(r.periode))+'</div>';
 
   // ---- Halaman 1 (PORTRAIT): judul + diagram batang total + nilai capaian ----
-  var capaianGrid=r.capaian.map(function(x){
-    return '<div class="lp-capaian"><div class="l">'+esc(x.label)+'</div>'+
-      '<div class="v">'+x.nilai+'<span class="u">'+esc(x.satuan)+'</span></div></div>';
-  }).join('');
+  var capaianGrid='<table class="lp-tabel"><thead><tr><th>No</th><th>Indikator</th><th>Tindakan</th><th>Kejadian</th><th>Capaian</th><th>Status</th></tr></thead><tbody>'+
+    r.capaian.map(function(x,i){return '<tr><td>'+(i+1)+'</td><td class="left">'+esc(x.label)+'</td><td>'+(/kasus/i.test(x.satuan||'')?'-':x.denominator)+'</td><td>'+x.numerator+'</td>'+
+      '<td><b>'+esc(capaianTeks(x))+'</b></td><td>'+(x.status==='BAIK'?'Baik':'Perlu perhatian')+'</td></tr>';}).join('')+'</tbody></table>';
   var h1=
     '<div class="lp-page">'+
-      '<div class="lp-kop"><div class="lp-logo kiri"></div>'+
-        '<div class="lp-teks"><div class="t1">'+esc(r.instansi)+'</div>'+
-          '<div class="t2">Komite Pencegahan dan Pengendalian Infeksi (PPI)</div>'+
-          '<div class="t3">'+esc(r.aplikasi)+' — Sistem Informasi Pencegahan dan Pengendalian Infeksi</div></div>'+
-        '<div class="lp-logo kanan"></div></div>'+
-      '<div class="lp-judul"><h2>LAPORAN BULANAN SIPPI AMI</h2>'+
-        '<div class="sub">'+esc(r.survei.nama)+' &middot; '+esc(periodeLabel)+'</div></div>'+
-      '<h3 class="lp-h">Diagram Batang — Total Tindakan &amp; Kejadian (Seluruh Ruangan)</h3>'+
+      kopHtml('Laporan Bulanan '+r.survei.nama,'Bulan '+bulanPanjangID(r.periode)+' · '+(r.instansi||'RSUD Aji Muhammad Idris'))+
+      '<h3 class="lp-h">A. Grafik Total Tindakan dan Kejadian Seluruh Ruangan</h3>'+
       '<canvas id="lpChart1" height="150"></canvas>'+
-      '<h3 class="lp-h mt-lg">Nilai Capaian</h3>'+
-      '<div class="lp-capaian-grid">'+capaianGrid+'</div>'+
+      '<h3 class="lp-h mt-lg">B. Nilai Capaian Indikator Tingkat Rumah Sakit</h3>'+capaianGrid+
       '<div class="lp-foot-note">Ruangan aktif: '+r.jumlahRuangan+' &middot; Entri terisi bulan ini: '+r.jumlahTerisi+'</div>'+
     '</div>';
 
@@ -2069,7 +2092,7 @@ function renderLaporanBulanan(area,r){
   }).join('');
   var h2=
     '<div class="lp-page lp-landscape">'+subHead+
-      '<h3 class="lp-h">Tabel Bulanan — Total Tindakan &amp; Kejadian per Ruangan</h3>'+
+      '<h3 class="lp-h">C. Total Tindakan dan Kejadian per Ruangan</h3>'+
       '<div class="lp-tabel-wrap"><table class="lp-tabel"><thead>'+
         '<tr><th rowspan="2">Ruangan</th>'+kolomHead+'</tr><tr>'+kolomSub+'</tr>'+
       '</thead><tbody>'+barisRuangan+
@@ -2086,12 +2109,12 @@ function renderLaporanBulanan(area,r){
   }).join(''):'<tr class="lp-empty"><td colspan="7">Tidak ada kejadian tercatat bulan ini.</td></tr>';
   var h3=
     '<div class="lp-page lp-landscape">'+subHead+
-      '<h3 class="lp-h">Daftar Kejadian Pasien</h3>'+
+      '<h3 class="lp-h">D. Daftar Kejadian Pasien</h3>'+
       '<div class="lp-tabel-wrap"><table class="lp-tabel"><thead><tr>'+
         '<th>Tgl Lapor</th><th>Nama Pasien</th><th>Jenis Kejadian</th><th>Ruangan</th>'+
         '<th>Tgl Tindakan</th><th>Tgl Infeksi</th><th>Penyebab Kejadian</th></tr></thead>'+
         '<tbody>'+barisPasien+'</tbody></table></div>'+
-      '<h3 class="lp-h mt-lg">Analisis</h3>'+
+      '<h3 class="lp-h mt-lg">E. Analisis Kejadian</h3>'+
       '<div class="lp-hint-edit">Klik teks di bawah untuk mengedit / menambahkan sebelum mencetak.</div>'+
       '<div class="lp-narasi" contenteditable="true" id="lpNarasi3">'+esc(r.narasiKejadian)+'</div>'+
     '</div>';
@@ -2099,10 +2122,10 @@ function renderLaporanBulanan(area,r){
   // ---- Halaman 4 (PORTRAIT): analisis rekap bulanan keseluruhan ----
   var h4=
     '<div class="lp-page">'+subHead+
-      '<h3 class="lp-h">Analisis Rekap Bulanan</h3>'+
+      '<h3 class="lp-h">F. Analisis Rekap Bulanan</h3>'+
       '<div class="lp-hint-edit">Klik teks di bawah untuk mengedit / menambahkan sebelum mencetak.</div>'+
       '<div class="lp-narasi" contenteditable="true" id="lpNarasi4">'+esc(r.narasiBulanan)+'</div>'+
-      '<h3 class="lp-h mt-lg">Catatan Tambahan Komite PPI</h3>'+
+      '<h3 class="lp-h mt-lg">G. Catatan Tambahan Komite PPI</h3>'+
       '<div class="lp-hint-edit">Kosong — isi bila ada catatan tambahan (opsional).</div>'+
       '<div class="lp-narasi" contenteditable="true" id="lpCatatan" data-placeholder="Tulis catatan tambahan di sini..."></div>'+
       '<div class="lp-sign"><div class="blok">Mengetahui,<br>Ketua Komite PPI<br>'+esc(r.instansi)+
@@ -2150,51 +2173,64 @@ function loadLaporanObservasi(kode){
 
 function renderLaporanObservasi(area,r,kode){
   var judul=kode==='APD'?'Kepatuhan Penggunaan APD':'Kepatuhan Kebersihan Tangan';
-
-  var barisChart=r.itemChart.map(function(x){
-    return '<div class="t small" style="display:flex;justify-content:space-between;padding:2px 0">'+
-      '<span>'+esc(x.label)+(x.peluang===false?' <span class="small muted">(tidak dihitung sebagai peluang)</span>':'')+'</span><span class="muted">'+(x.persen===null?'N/A':x.persen+'%')+' ('+x.patuh+'/'+x.total+')</span></div>';
-  }).join('');
-
-  var barisA=r.formA.map(function(x){
-    return '<tr><td>'+esc(x.ruang)+'</td><td class="num">'+x.total+'</td><td class="num">'+x.peluang+'</td>'+
-      '<td class="num"><b>'+(x.capaian===null?'N/A':x.capaian+'%')+'</b></td></tr>';
-  }).join('');
-
+  var satuan=kode==='HH'?'Momen':'Item', per=r.namaBulan+' '+r.tahun;
+  var subHead='<div class="lp-subhead">Laporan '+esc(judul)+' — Bulan '+esc(per)+'</div>';
+  var pct=function(x){return x===null||x===undefined?'N/A':x+'%';};
+  // ---- Halaman 1: kop, judul, A grafik, B rincian ----
+  var barisB=r.itemChart.map(function(x,i){
+    return '<tr><td>'+(i+1)+'</td><td class="left">'+esc(x.label)+(x.peluang===false?' *':'')+'</td><td>'+x.patuh+'</td><td>'+x.total+'</td><td><b>'+pct(x.persen)+'</b></td></tr>';}).join('');
+  var h1='<div class="lp-page">'+
+      kopHtml('Laporan '+judul,'Bulan '+per+' · Semua Unit Pelayanan')+
+      '<h3 class="lp-h">A. Grafik Kepatuhan per '+satuan+'</h3>'+
+      '<canvas id="lpChartObs" height="140"></canvas>'+
+      '<h3 class="lp-h mt-lg">B. Rincian Kepatuhan per '+satuan+'</h3>'+
+      '<table class="lp-tabel"><thead><tr><th>No</th><th>'+satuan+'</th><th>Patuh</th><th>Diamati</th><th>Kepatuhan</th></tr></thead><tbody>'+barisB+'</tbody></table>'+
+      (r.itemChart.some(function(x){return x.peluang===false;})?'<div class="lp-foot-note" style="text-align:left">* Dicatat terpisah, tidak dihitung sebagai peluang kebersihan tangan (peluang = 5 momen).</div>':'')+
+    '</div>';
+  // ---- Halaman 2: C per profesi, D Form A ----
+  var barisA=r.formA.map(function(x,i){
+    return '<tr'+(x.peluang?'':' class="lp-redup"')+'><td>'+(i+1)+'</td><td class="left">'+esc(x.ruang)+'</td><td>'+x.total+'</td><td>'+x.peluang+'</td><td><b>'+pct(x.capaian)+'</b></td></tr>';}).join('');
+  var h2='<div class="lp-page">'+subHead+
+      '<h3 class="lp-h">C. Kepatuhan per Profesi</h3><div class="lp-embed">'+htmlPerProfesi(r,kode)+'</div>'+
+      '<h3 class="lp-h mt-lg">D. Form A — Sensus Harian Indikator Mutu</h3>'+
+      '<div class="small muted mb">'+esc(r.formB.judul_indikator)+' &middot; '+esc(per)+' &middot; Area: Semua Unit Pelayanan</div>'+
+      '<table class="lp-tabel tabel-harian"><thead><tr><th>No</th><th>Ruang</th><th>Total</th><th>Peluang</th><th>Hasil Capaian</th></tr></thead><tbody>'+barisA+
+      '<tr class="total"><td></td><td class="left">JUMLAH</td><td>'+r.formATotal.total+'</td><td>'+r.formATotal.peluang+'</td><td>'+pct(r.formATotal.capaian)+'</td></tr></tbody></table>'+
+    '</div>';
+  // ---- Halaman 3: E Form B (analisa & rekomendasi dapat diedit) + tanda tangan ----
+  var b=r.formB, baris=function(l,v){return '<tr><th class="left" style="width:30%">'+l+'</th><td class="left">'+v+'</td></tr>';};
+  var h3='<div class="lp-page" id="formBArea">'+subHead+
+      '<h3 class="lp-h">E. Form B — Laporan Indikator Mutu (Komite PMKP)</h3>'+
+      '<table class="lp-tabel lp-formb"><tbody>'+
+        baris('Judul Indikator',esc(b.judul_indikator))+baris('Area Monitoring',esc(b.area_monitoring))+
+        baris('Numerator',esc(b.numerator))+baris('Denominator',esc(b.denominator))+
+        baris('Formula',esc(b.formula))+baris('Target',esc(b.target))+baris('Hasil Capaian',esc(b.hasil_capaian))+
+        baris('Kesimpulan',esc(b.kesimpulan))+
+      '</tbody></table>'+
+      '<h3 class="lp-h mt-lg">Analisa Hasil Capaian</h3>'+
+      (b.analisa_draf&&b.analisa?'<div class="lp-hint-edit">Draf otomatis dari data bulan ini — periksa, lengkapi bagian "(lengkapi)", lalu klik Simpan Form B.</div>':
+        '<div class="lp-hint-edit">Klik kotak di bawah untuk mengedit sebelum mencetak.</div>')+
+      '<textarea id="fbAnalisa" class="lp-narasi lp-ta" rows="'+(b.analisa?12:4)+'" placeholder="Tulis analisa capaian bulan ini...">'+esc(b.analisa)+'</textarea>'+
+      '<h3 class="lp-h mt-lg">Rekomendasi Tindak Lanjut</h3>'+
+      '<textarea id="fbRekomendasi" class="lp-narasi lp-ta" rows="5" placeholder="Tulis rekomendasi tindak lanjut...">'+esc(b.rekomendasi)+'</textarea>'+
+      '<div class="lp-sign"><div class="blok">Penanggung Jawab Data<br>Komite PPI<div class="sp"></div><b>(____________________________)</b></div></div>'+
+      '<div class="lp-foot-note">Tanda tangan diatur saat Unduh PDF. Dibuat melalui SIPPI AMI pada '+fmtID(todayISO())+'.</div>'+
+    '</div>';
   area.innerHTML=
-    '<div class="card card-pad mb"><h3>Diagram Batang — Kepatuhan per '+(kode==='HH'?'Momen':'Item')+' ('+esc(r.namaBulan)+' '+r.tahun+')</h3>'+
-      '<canvas id="lpChartObs" height="140"></canvas></div>'+
-    '<div class="card card-pad mb"><div class="desc mb">Rincian angka (sumber diagram di atas):</div>'+barisChart+'</div>'+
-    htmlPerProfesi(r,kode)+
-    '<div class="card card-pad mb"><h3>Form A — Sensus Harian Indikator Mutu</h3>'+
-      '<div class="desc mb">'+esc(judul)+' &middot; '+esc(r.namaBulan)+' '+r.tahun+' &middot; Area: Semua Unit Pelayanan</div>'+
-      '<div class="table-scroll"><table class="tabel-harian"><thead><tr><th>Ruang</th><th class="num">Total</th><th class="num">Peluang</th><th class="num">Hasil Capaian</th></tr></thead>'+
-      '<tbody>'+barisA+
-      '<tr style="background:var(--bg-2)"><td><b>JUMLAH</b></td><td class="num"><b>'+r.formATotal.total+'</b></td><td class="num"><b>'+r.formATotal.peluang+'</b></td>'+
-      '<td class="num"><b>'+(r.formATotal.capaian===null?'N/A':r.formATotal.capaian+'%')+'</b></td></tr>'+
-      '</tbody></table></div></div>'+
-    '<div class="card card-pad mb" id="formBArea"><h3>Form B — Laporan Indikator Mutu (ke Komite PMKP)</h3>'+
-      '<div class="field"><label>Judul Indikator</label><input value="'+esc(r.formB.judul_indikator)+'" disabled></div>'+
-      '<div class="field"><label>Area Monitoring</label><input value="'+esc(r.formB.area_monitoring)+'" disabled></div>'+
-      '<div class="field"><label>Numerator</label><input value="'+esc(r.formB.numerator)+'" disabled></div>'+
-      '<div class="field"><label>Denominator</label><input value="'+esc(r.formB.denominator)+'" disabled></div>'+
-      '<div class="row"><div class="field"><label>Formula</label><input value="'+esc(r.formB.formula)+'" disabled></div>'+
-      '<div class="field"><label>Target</label><input value="'+esc(r.formB.target)+'" disabled></div>'+
-      '<div class="field"><label>Hasil Capaian</label><input value="'+esc(r.formB.hasil_capaian)+'" disabled></div></div>'+
-      '<div class="field"><label>Kesimpulan</label><textarea rows="2" disabled>'+esc(r.formB.kesimpulan)+'</textarea></div>'+
-      '<div class="field"><label>Analisa Hasil Capaian</label>'+
-        (r.formB.analisa_draf&&r.formB.analisa?'<div class="badge warn" style="display:block;white-space:normal;margin-bottom:6px">Draf otomatis dari data bulan ini. Periksa, lengkapi bagian "(lengkapi)", lalu klik Simpan Form B.</div>':'')+
-        '<textarea id="fbAnalisa" rows="'+(r.formB.analisa?12:4)+'" placeholder="Tulis analisa capaian bulan ini...">'+esc(r.formB.analisa)+'</textarea></div>'+
-      '<div class="field"><label>Rekomendasi Tindak Lanjut</label><textarea id="fbRekomendasi" rows="4" placeholder="Tulis rekomendasi tindak lanjut...">'+esc(r.formB.rekomendasi)+'</textarea></div>'+
-      '<div class="row"><button class="btn teal" id="fbSimpan">Simpan Form B</button>'+
-      '<button class="btn" id="obsPdf">Unduh PDF</button></div></div>';
-
-  area.insertAdjacentHTML('beforeend',htmlLampiranObservasi(r,kode));
+    '<div class="flex between mb"><div></div><div class="lp-toolbar">'+
+      '<button class="btn ghost sm" id="lpUlang">Ganti Bulan / Survei</button>'+
+      '<button class="btn teal sm" id="fbSimpan">Simpan Form B</button>'+
+      '<button class="btn sm" id="obsPdf">Unduh PDF</button></div></div>'+
+    '<div class="lp-sheet" id="lpSheet">'+h1+h2+h3+'</div>';
+  $('#lpUlang').onclick=function(){ area.innerHTML=''; };
+  var sheet=$('#lpSheet');
+  sheet.insertAdjacentHTML('beforeend','<div class="lp-page lp-landscape">'+subHead+'<h3 class="lp-h">LAMPIRAN — Rincian Observasi per Petugas</h3><div class="lp-embed">'+htmlLampiranObservasi(r,kode)+'</div></div>');
   gambarGrafikProfesi(r,kode);
   var labels=r.itemChart.map(function(x){return labelSingkat(x.label);});
   var data=r.itemChart.map(function(x){return x.persen===null?0:x.persen;});
-  buatChart($('#lpChartObs').getContext('2d'),{type:'bar',data:{labels:labels,datasets:[{label:'Kepatuhan (%)',data:data,backgroundColor:'#0F6E56',borderRadius:4,maxBarThickness:40}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}},grid:{color:'#E4ECEA'}},x:{grid:{display:false}}}}});
+  buatChart($('#lpChartObs').getContext('2d'),{type:'bar',data:{labels:labels,datasets:[{label:'Kepatuhan (%)',data:data,backgroundColor:r.itemChart.map(function(x){return x.peluang===false?'#9AA6B0':'#0F6E56';}),borderRadius:4,maxBarThickness:40}]},
+    plugins:[labelNilaiBatang],
+    options:{responsive:true,layout:{padding:{top:16}},plugins:{labelNilai:{persen:true},legend:{display:false}},scales:{y:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}},grid:{color:'#E4ECEA'}},x:{grid:{display:false}}}}});
 
   $('#obsPdf').onclick=function(){
     ppiPDF({konten:kontenLaporanObservasi(r,kode),lampiran:kontenLampiranObservasi(r,kode),judul:'Laporan '+judul,sub:'Bulan '+r.namaBulan+' '+r.tahun+' · Semua Unit Pelayanan',orientasi:'portrait',
@@ -2902,6 +2938,16 @@ function logoDataUrl(nama){
   var v=getComputedStyle(document.documentElement).getPropertyValue(nama)||'';
   var m=v.match(/url\(\s*['"]?(data:image\/[^'")]+)['"]?\s*\)/);
   return m?m[1]:null;
+}
+/* Kop surat resmi di layar — sama persis dengan kop PDF (kopPdf). */
+function kopHtml(judul,sub){
+  return '<div class="kop-resmi"><div class="lp-logo kiri"></div><div class="kop-teks">'+
+      '<div class="k1">PEMERINTAH KABUPATEN KUTAI KARTANEGARA</div><div class="k2">DINAS KESEHATAN</div>'+
+      '<div class="k2">UNIT ORGANISASI BERSIFAT KHUSUS</div><div class="k3">RUMAH SAKIT UMUM DAERAH AJI MUHAMMAD IDRIS</div>'+
+      '<div class="k4">Jalan Poros Muara Badak-Marangkayu, RT02 Sambera Jembatan, Desa Tanjung Limau</div>'+
+      '<div class="k4">Kecamatan Muara Badak, Kode Pos 75382, Pos-el : <span class="surel">rsudajimuhammadidris1@gmail.com</span></div>'+
+    '</div><div class="lp-logo kanan"></div></div><div class="kop-garis"></div>'+
+    '<div class="judul-resmi"><div class="j1">'+esc(String(judul).toUpperCase())+'</div><div class="j2">'+esc(sub)+'</div></div>';
 }
 function kopPdf(lebar){
   var kiri=logoDataUrl('--logo-kukar'), kanan=logoDataUrl('--logo');
