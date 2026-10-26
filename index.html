@@ -566,7 +566,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.10.26';
+var VERSI_TAMPILAN='2026.10.26.2';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -766,9 +766,8 @@ function menuFor(role){
     {id:'surveiHH',t:'Survei HH',ic:'clipboard'},
     {id:'surveiAPD',t:'Survei APD',ic:'clipboard'},
     {id:'bundle',t:'Bundle HAIs',ic:'survey'},
-    {id:'rekap',t:'Rekap & Analisis',ic:'chart'},
+    {id:'rekap',t:'Rekap & Laporan',ic:'report'},
     {id:'pasien',t:'Rekap Data Pasien',ic:'users'},
-    {id:'laporan',t:'Laporan Bulanan',ic:'report'},
     {id:'survei',t:'Kelola Survei',ic:'survey'},
     {id:'cek',t:'Cek Sistem',ic:'cek'}
   ];
@@ -874,16 +873,17 @@ function renderApp(){
   setInterval(refreshBell,60000);
 }
 function go(view){
+  if(view==='laporan'){S._tabRekap='laporan';view='rekap';}   // menu lama "Laporan Bulanan" kini tab di Rekap & Laporan
   S.view=view; tutupMenu();
   $all('#nav a[data-v]').forEach(function(a){a.classList.toggle('on',a.getAttribute('data-v')===view);});
-  var titles={dashboard:'Beranda',input:'Input Harian',harian:'Survei Harian',rekap:S.user.role==='KOMITE'?'Rekap & Analisis':'Rekap Ruangan',
+  var titles={dashboard:'Beranda',input:'Input Harian',harian:'Survei Harian',rekap:S.user.role==='PERAWAT'?'Rekap Ruangan':'Rekap & Laporan',
     laporan:'Laporan Bulanan',survei:'Kelola Survei',obat:'Master Obat',users:'Pengguna',ruangan:'Ruangan',audit:'Audit Log',
     surveiHH:'Survei HH',surveiAPD:'Survei APD',pasien:'Rekap Data Pasien',bundle:'Bundle HAIs',cek:'Cek Sistem'};
   $('#ttl').textContent=titles[view]||'';
   $('#crumb').textContent=(titles[view]||'').toUpperCase();
   var c=$('#content'); c.innerHTML='<div class="spinner"></div>';
   ({dashboard:viewDashboard,input:viewInput,harian:viewHarian,rekap:viewRekap,
-    laporan:viewLaporan,
+    laporan:function(c){S._tabRekap='laporan';viewRekap(c);},
     survei:viewSurvei,obat:viewObat,users:viewUsers,ruangan:viewRuangan,audit:viewAudit,
     surveiHH:function(c){viewInputObservasi(c,'HH','Survei HH');},
     surveiAPD:function(c){viewInputObservasi(c,'APD','Survei APD');},
@@ -1066,7 +1066,7 @@ function muatSatuRekapBeranda(surveiId, surveiNama, surveiKode, sudahAda){
     var judulGrafik='GRAFIK '+esc((surveiKode||surveiNama||'').toUpperCase())+' BULAN '+bulanTahunID(r.periode);
     box.innerHTML=
       '<div class="card card-pad mb"><div class="flex between wrap">'+
-        '<div><h3>'+esc(surveiNama)+' — Rekap & Analisis Seluruh Ruangan</h3>'+
+        '<div><h3>'+esc(surveiNama)+' — Rekap Seluruh Ruangan</h3>'+
         '<div class="desc">Periode '+esc(r.periode)+' · '+r.jumlahTerisi+' pengisian dari '+r.jumlahRuangan+' ruangan aktif</div></div>'+
         '<button class="btn ghost sm" onclick="go(\'rekap\')">Lihat detail per ruangan</button>'+
       '</div></div>'+
@@ -1686,19 +1686,28 @@ function viewRekap(c){
     if(!survei.length){c.innerHTML='<div class="empty"><h3>Belum ada survei</h3></div>';return;}
     S._rk={survei:survei,ruangan:ruangan,tahun:tahun};
     var defRuang=S.user.role==='PERAWAT'?S.user.ruangan_id:(ruangan[0]&&ruangan[0].ruangan_id);
+    var bolehLaporan=S.user.role!=='PERAWAT';
     c.innerHTML=
-      '<div class="card card-pad mb"><div class="row">'+
+      '<div class="card card-pad mb"><div class="row" id="rFilter">'+
         '<div><label>Survei</label><select id="rSurvei">'+survei.map(function(s){return '<option value="'+s.survei_id+'">'+esc(s.nama)+'</option>';}).join('')+'</select></div>'+
         '<div><label>Ruangan</label><select id="rRuang" '+(S.user.role==='PERAWAT'?'disabled':'')+'>'+ruangan.map(function(r){return '<option value="'+r.ruangan_id+'">'+esc(r.nama)+'</option>';}).join('')+'</select></div>'+
         '<div><label>Bulan</label><input type="month" id="rBulan" value="'+curPeriode()+'"></div>'+
-      '</div><div class="flex between mt"><div class="seg"><button class="on" data-tab="tabel">Rekap Bulanan</button><button data-tab="tren">Tren Tahunan</button></div>'+
+      '</div><div class="flex between mt" id="rTabWrap"><div class="seg" id="rTab"><button data-tab="tabel">'+(bolehLaporan?'Per Ruangan':'Rekap Bulanan')+'</button><button data-tab="tren">Tren Tahunan</button>'+
+        (bolehLaporan?'<button data-tab="laporan">Laporan RS</button>':'')+'</div>'+
         '<span class="small muted" id="rHint"></span></div></div>'+
       '<div id="rArea"><div class="spinner"></div></div>';
     if(defRuang)$('#rRuang').value=defRuang;
-    var tab='tabel';
-    function refresh(){ tab==='tabel'?loadRekapTabel():loadTren(); }
+    var tab=S._tabRekap&&(S._tabRekap!=='laporan'||bolehLaporan)?S._tabRekap:'tabel';
+    function refresh(){
+      S._tabRekap=tab;
+      $all('#rTab button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-tab')===tab);});
+      var lap=tab==='laporan'; $('#rFilter').style.display=lap?'none':'';
+      $('#rTabWrap').classList.toggle('mt',!lap);
+      if(lap){ viewLaporan($('#rArea')); return; }
+      tab==='tabel'?loadRekapTabel():loadTren();
+    }
     ['rSurvei','rRuang','rBulan'].forEach(function(i){$('#'+i).onchange=refresh;});
-    $all('.seg button').forEach(function(b){b.onclick=function(){$all('.seg button').forEach(function(x){x.classList.remove('on');});b.classList.add('on');tab=b.getAttribute('data-tab');refresh();};});
+    $all('#rTab button').forEach(function(b){b.onclick=function(){tab=b.getAttribute('data-tab');refresh();};});
     refresh();
   });
 }
