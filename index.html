@@ -142,7 +142,20 @@
   input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(20,118,190,.16)}
   .field{margin-bottom:16px}
   .row{display:flex;gap:12px;flex-wrap:wrap}
-  .row>*{flex:1;min-width:140px}
+  .row>*{flex:1 1 140px;min-width:0}
+  /* Kolom tanggal/bulan/jam: di iPhone (Safari) lebarnya bawaan sistem sehingga meluber ke kolom sebelah.
+     Paksa mengikuti lebar kolom, tinggi sama dengan isian lain, teks rata kiri. */
+  input[type=date],input[type=month],input[type=time],input[type=datetime-local]{-webkit-appearance:none;appearance:none;
+    display:block;min-width:0;max-width:100%;min-height:45px;line-height:1.25;text-align:left}
+  input::-webkit-date-and-time-value{text-align:left;margin:0}
+  input::-webkit-datetime-edit{padding:0}
+  input,select{min-height:45px}
+  select{max-width:100%}
+  /* HP: semua isian formulir satu kolom penuh agar rapi dan tidak terpotong */
+  @media(max-width:560px){.row>*{flex-basis:100%}}
+  .row.obs-identitas{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 16px}
+  @media(max-width:900px){.row.obs-identitas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:560px){.row.obs-identitas{grid-template-columns:1fr}}
 
   .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:var(--radius-sm);border:1px solid transparent;background:linear-gradient(180deg,var(--blue),var(--blue-600));color:#fff;font-weight:600;font-size:13.5px;cursor:pointer;transition:transform .05s,filter .15s,box-shadow .15s;box-shadow:0 6px 16px rgba(20,118,190,.26)}
   /* Jaga-jaga: ikon (ico()) tidak membawa ukuran sendiri, jadi tanpa aturan ini
@@ -597,7 +610,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.10.26.7';
+var VERSI_TAMPILAN='2026.10.27';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -1078,13 +1091,28 @@ function muatRekapBerandaKomite(){
   area.innerHTML='<div class="spinner"></div>';
   // SATU panggilan untuk semua survei (dulu: 1 + 1 per survei).
   call('getRekapBerandaKomite',S.token,curPeriode()).then(function(d){
-    var aktif=(d&&d.ok&&d.survei)||[];
-    if(!aktif.length){area.innerHTML='';return;}
-    area.innerHTML=aktif.map(function(s){return '<div id="berandaRekap_'+s.survei_id+'"></div>';}).join('');
+    var aktif=((d&&d.ok&&d.survei)||[]).filter(function(s){return !/^(HH|APD|BDL_)/.test(String(s.kode||''));});  // survei Komite bukan rekap ruangan
+    var obs=(d&&d.observasi)||[];
+    if(!aktif.length&&!obs.length){area.innerHTML='';return;}
+    area.innerHTML=aktif.map(function(s){return '<div id="berandaRekap_'+s.survei_id+'"></div>';}).join('')+htmlRingkasObsBeranda(obs);
     aktif.forEach(function(s){ muatSatuRekapBeranda(s.survei_id, s.nama, s.kode, d.rekap[s.survei_id]); });
   }).catch(function(){ area.innerHTML=''; });
 }
 
+/* Ringkasan survei yang diisi Komite (HH & APD) di Beranda: capaian bulan ini vs target. */
+function htmlRingkasObsBeranda(obs){
+  if(!obs.length)return '';
+  return '<div class="card card-pad mb"><div class="flex between wrap mb"><div><h3>Survei Komite — Kepatuhan Bulan Ini</h3>'+
+      '<div class="desc">Dihitung dari observasi Survei HH dan Survei APD bulan ini (seluruh ruangan).</div></div>'+
+      '<button class="btn ghost sm" onclick="S._tabRekap=\'laporan\';go(\'rekap\')">Buka Laporan RS</button></div>'+
+    '<div class="rate-grid">'+obs.map(function(o){
+      var ada=o.capaian!==null&&o.capaian!==undefined, capai=ada&&o.capaian>=o.target;
+      return '<div class="rate"><div class="r-lbl">'+esc(o.kode==='HH'?'Kepatuhan Kebersihan Tangan':'Kepatuhan Penggunaan APD')+'</div>'+
+        '<div class="r-val tnum">'+(ada?o.capaian:'–')+'<span class="u">%</span></div>'+
+        '<div class="r-form">'+(ada?(o.total+' / '+o.peluang+(o.kode==='HH'?' peluang':' petugas')+' · '+o.observasi+' observasi'):'Belum ada observasi bulan ini')+'</div>'+
+        '<div class="mt">'+(ada?'<span class="badge '+(capai?'ok':'danger')+'">'+(capai?'Mencapai target ':'Di bawah target ')+o.target+'%</span>':'<span class="badge mut">Target '+o.target+'%</span>')+'</div></div>';
+    }).join('')+'</div></div>';
+}
 function muatSatuRekapBeranda(surveiId, surveiNama, surveiKode, sudahAda){
   var box=$('#berandaRekap_'+surveiId); if(!box)return;
   box.innerHTML='<div class="spinner"></div>';
@@ -2270,7 +2298,7 @@ function renderObsStep1(area){
     '<div id="obsKegiatanLainWrap" style="display:none"><label>Kegiatan lainnya</label><input id="obsKegiatanLain" placeholder="Tulis kegiatan"></div>'
     :'';
   var KW=sv.kewaspadaan||(st.kode==='APD'?['Kontak','Droplet','Airborne']:null);
-  if(KW)kegiatanHTML+='<div><label>Kewaspadaan transmisi</label><select id="obsKewaspadaan"><option value="">– Tidak ada / standar</option>'+
+  if(KW)kegiatanHTML+='<div><label>Kewaspadaan transmisi</label><select id="obsKewaspadaan"><option value="">Standar (tidak ada)</option>'+
     KW.map(function(k){return '<option>'+esc(k)+'</option>';}).join('')+'</select></div>';
   if(id.profesi)id.profesi=normProfesi(id.profesi);
   var profesi=DAFTAR_PROFESI, profLain=id.profesi&&profesi.indexOf(id.profesi)<0;
@@ -2288,10 +2316,10 @@ function renderObsStep1(area){
   area.innerHTML=
     '<div class="card card-pad mb"><h3>Isi Survey — '+esc(sv.nama)+'</h3>'+
       '<div class="desc mb">Isi identitas, nilai semua '+(st.kode==='HH'?'momen':'item')+' di bawah, lalu simpan. Pilih <b>N/A</b> untuk yang tidak berlaku.</div>'+
-      '<div class="row">'+
+      '<div class="row obs-identitas">'+
         '<div><label>Tanggal</label><input type="date" id="obsTgl" value="'+(id.tanggal||todayISO())+'" max="'+todayISO()+'"></div>'+
         '<div><label>Ruangan</label><select id="obsRuang">'+st.ruangan.map(function(r){return '<option value="'+r.ruangan_id+'"'+(id.ruangan_id===r.ruangan_id?' selected':'')+'>'+esc(r.nama)+'</option>';}).join('')+'</select></div>'+
-        '<div><label>Nama petugas</label><input id="obsNama" placeholder="Nama petugas yang diobservasi"></div>'+
+        '<div><label>Nama petugas</label><input id="obsNama" placeholder="Nama petugas"></div>'+
         '<div><label>Profesi</label><select id="obsProfesi">'+profesi.map(function(p){return '<option'+((id.profesi===p||(profLain&&p==='Lainnya'))?' selected':'')+'>'+p+'</option>';}).join('')+'</select></div>'+
         '<div id="obsProfesiLainWrap"'+(profLain?'':' style="display:none"')+'><label>Profesi lainnya</label><input id="obsProfesiLain" placeholder="Tulis profesi, mis. Perekam medis" value="'+(profLain?esc(id.profesi):'')+'"></div>'+
         kegiatanHTML+
