@@ -610,7 +610,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.10.27.3';
+var VERSI_TAMPILAN='2026.10.27.4';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -1244,7 +1244,11 @@ function gambarChartBerandaKomite(canvasId, r){
 }
 function mapIc(n){return{clipboard:'clipboard',alert:'flag',flag:'flag',building:'building',calendar:'chart',users:'users'}[n]||'dash';}
 function jalankanPengingat(){
-  call('jalankanPengingatHarian',null).then(function(r){ toast('Pengingat dibuat: '+r.notifikasi_dibuat+' notifikasi.','ok'); });
+  call('kirimPengingatHarian',S.token).then(function(r){
+    if(!r||!r.ok){toast((r&&r.pesan)||'Gagal mengirim pengingat.','err');return;}
+    toast(r.notifikasi_dibuat?('Pengingat terkirim ke '+r.notifikasi_dibuat+' ruangan yang belum mengisi.'+(r.sudah_dikirim?' ('+r.sudah_dikirim+' sudah diingatkan sebelumnya)':'')):
+      (r.sudah_dikirim?'Semua ruangan yang belum mengisi sudah diingatkan hari ini.':'Semua ruangan sudah mengisi hari ini ✓'),'ok');
+  }).catch(function(e){toast('Gagal: '+((e&&e.message)||e),'err');});
 }
 
 /* ================= INPUT HARIAN (form dinamis) ================= */
