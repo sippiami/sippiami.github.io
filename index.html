@@ -610,7 +610,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.03.3';
+var VERSI_TAMPILAN='2026.11.03.4';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -2098,6 +2098,11 @@ function drawLine(id,labels,data,nama,satuan){
 }
 
 /* ================= LAPORAN BULANAN (Komite PPI) ================= */
+function _survObs(kode){return /^(HH|APD|BDL_)/.test(String(kode||''));}   // survei observasi Komite (laporan bentuk Form A/B)
+function _judulObs(kode,r){
+  if(kode==='APD')return 'Kepatuhan Penggunaan APD'; if(kode==='HH')return 'Kepatuhan Kebersihan Tangan';
+  var n=String((r&&r.formB&&r.formB.judul_indikator)||kode); return /^kepatuhan/i.test(n)?n:'Kepatuhan '+n;
+}
 function viewLaporan(c){
   call('getDaftarSurvei',S.token).then(function(list){
     var survei=list.filter(function(s){return s.status==='AKTIF';});
@@ -2111,14 +2116,14 @@ function viewLaporan(c){
       '</div><div class="desc mt" id="lpDesc"></div></div>'+
       '<div id="lpArea"></div>';
     var descLp=function(){var sv=survei.filter(function(s){return s.survei_id===$('#lpSurvei').value;})[0];
-      $('#lpDesc').textContent=sv&&(sv.kode==='HH'||sv.kode==='APD')
-        ?'Laporan siap cetak (PDF): grafik & rincian per '+(sv.kode==='HH'?'momen':'item')+', kepatuhan per profesi, kepatuhan per unit, Form A, dan Form B (analisa & rekomendasi dapat diedit).'
-        :'Laporan siap cetak (PDF): ringkasan capaian, tabel bulanan, daftar kejadian pasien, dan analisis. Anda dapat mengedit/menambahkan narasi sebelum mencetak.';};
+      $('#lpDesc').textContent=sv&&_survObs(sv.kode)
+        ?'Laporan siap cetak (PDF): grafik & rincian per '+(sv.kode==='HH'?'momen':'item')+', kepatuhan per profesi, kepatuhan per unit, Form A, dan Form B (analisa & rekomendasi dapat diedit). Tombol "Form A & B (PMKP)" mencetak format Word Komite PMKP.'
+        :'Laporan siap cetak (PDF): ringkasan capaian, tabel bulanan, daftar kejadian pasien, dan analisis. Tombol "Form A & B (PMKP)" mencetak format Word Komite PMKP per indikator.';};
     $('#lpSurvei').onchange=descLp; descLp();
     $('#lpBuat').onclick=function(){
       var sid=$('#lpSurvei').value;
       var sv=survei.filter(function(s){return s.survei_id===sid;})[0];
-      if(sv&&(sv.kode==='APD'||sv.kode==='HH')) loadLaporanObservasi(sv.kode);
+      if(sv&&_survObs(sv.kode)) loadLaporanObservasi(sv.kode);
       else loadLaporanBulanan();
     };
   });
@@ -2216,12 +2221,14 @@ function renderLaporanBulanan(area,r){
   area.innerHTML=
     '<div class="flex between mb"><div></div>'+
       '<div class="lp-toolbar"><button class="btn ghost sm" id="lpUlang">Ganti Bulan / Survei</button>'+
+      '<button class="btn ghost sm" id="btnINM">Form A &amp; B (PMKP)</button>'+
       '<button class="btn sm" id="lpCetak">Unduh PDF</button></div></div>'+
     '<div class="lp-sheet" id="lpSheet">'+h1+h2+h3+h4+'</div>';
   $('#lpCetak').onclick=function(){
     ppiPDF({konten:kontenLaporanBulanan(r),judul:'Laporan Bulanan '+r.survei.nama,sub:'Bulan '+bulanPanjangID(r.periode)+' · '+(r.instansi||'RSUD Aji Muhammad Idris'),orientasi:'portrait',namaFile:'Laporan Bulanan '+r.survei.nama+' '+r.periode});
   };
   $('#lpUlang').onclick=function(){ area.innerHTML=''; };
+  $('#btnINM').onclick=function(){ dlgFormINMHais(r); };
   drawChartLaporanTotal('lpChart1', r.capaian);
 }
 /* Diagram batang gabungan: Tindakan (biru) vs Kejadian (merah) per indikator,
@@ -2252,7 +2259,7 @@ function loadLaporanObservasi(kode){
 }
 
 function renderLaporanObservasi(area,r,kode){
-  var judul=kode==='APD'?'Kepatuhan Penggunaan APD':'Kepatuhan Kebersihan Tangan';
+  var judul=_judulObs(kode,r);
   var satuan=kode==='HH'?'Momen':'Item', per=r.namaBulan+' '+r.tahun;
   var subHead='<div class="lp-subhead">Laporan '+esc(judul)+' — Bulan '+esc(per)+'</div>';
   var pct=function(x){return x===null||x===undefined?'N/A':x+'%';};
@@ -3531,7 +3538,7 @@ function kontenLampiranObservasi(r,kode){
   if(!r.fields||!r.fields.length||!r.rincian)return [];   // Kode.gs lama: lampiran dilewati agar PDF tetap jadi
   var F=r.fields||[], R=r.rincian||[], adaKeg=R.some(function(o){return o.kegiatan||o.kewaspadaan;}), n=F.length;
   var k=[fJudul('','LAMPIRAN — Rincian Observasi per Petugas','landscape'),
-    fCatatan(R.length+' observasi · '+r.namaBulan+' '+r.tahun+(kode==='HH'?' · Kepatuhan Kebersihan Tangan':' · Kepatuhan Penggunaan APD'))];
+    fCatatan(R.length+' observasi · '+r.namaBulan+' '+r.tahun+' · '+_judulObs(kode,r))];
   var h1=[{text:'No',rowSpan:2},{text:'Tanggal',rowSpan:2},{text:'Ruang',rowSpan:2},{text:'Nama Petugas',rowSpan:2},{text:'Profesi',rowSpan:2}];
   if(adaKeg)h1.push({text:'Kegiatan'+(kode==='APD'?' / Kewaspadaan':''),rowSpan:2});
   h1.push({text:kode==='HH'?'Momen':'Item',colSpan:n}); for(var i=1;i<n;i++)h1.push({});
@@ -3833,7 +3840,7 @@ function _isiP(p,teks,mulai,akhir){
   }
 }
 function _cariP(doc,pred,nth){var n=0,ps=_wEls(doc,'p');for(var i=0;i<ps.length;i++){if(pred(_teksP(ps[i]))){if(n===(nth||0))return ps[i];n++;}}return null;}
-function _pas(v){return v===null||v===undefined?'N/A':Number(v).toFixed(2)+' %';}
+function _pas(v,sat){return v===null||v===undefined?'N/A':Number(v).toFixed(2)+' '+(sat||'%');}
 function _tglPanjang(iso){return tglPanjangID(iso).replace(/^(\d) /,'0$1 ');}
 
 /* data: {kode, namaBulan, tahun, formA[], formATotal, formB, analisa, rekomendasi, ttd:{tempat,tanggal,pj_nama,pj_nip,pg_nama,pg_nip}} */
@@ -3843,17 +3850,15 @@ function buatDocxINM(data){
     return JSZip.loadAsync(u);
   }).then(function(zip){
     return zip.file('word/document.xml').async('string').then(function(xml){
-      var doc=new DOMParser().parseFromString(xml,'application/xml'), apd=data.kode==='APD', t=data.ttd||{};
-      var judul=apd?'Kepatuhan Penggunaan Alat Pelindung Diri (APD)':'Kepatuhan Kebersihan Tangan';
+      var doc=new DOMParser().parseFromString(xml,'application/xml'), t=data.ttd||{}, sat=data.satuan||'%', pengali=data.pengali||100;
+      var judul=data.judul||'Kepatuhan Kebersihan Tangan';
       var setP=function(pred,teks,nth){var p=_cariP(doc,pred,nth);if(p)_isiP(p,teks);};
       // ---- FORM A: identitas ----
       setP(function(s){return /^: *Kepatuhan Kebersihan Tangan$/.test(s);},': '+judul,0);
       setP(function(s){return /^: *Oktober$/.test(s);},': '+data.namaBulan,0);
       setP(function(s){return /^: *2026$/.test(s);},': '+data.tahun,0);
-      if(apd){
-        setP(function(s){return s==='TOTAL KEBERSIHAN TANGAN YANG DILAKUKAN';},'JUMLAH PETUGAS YANG MENGGUNAKAN APD SESUAI STANDAR',0);
-        setP(function(s){return s==='PELUANG KEBERSIHAN TANGAN';},'JUMLAH PETUGAS YANG DIAMATI',0);
-      }
+      if(data.kolA1)setP(function(s){return s==='TOTAL KEBERSIHAN TANGAN YANG DILAKUKAN';},data.kolA1,0);
+      if(data.kolA2)setP(function(s){return s==='PELUANG KEBERSIHAN TANGAN';},data.kolA2,0);
       // ---- FORM A: baris ruang ----
       var pRuang=_cariP(doc,function(s){return s==='RUANG';}), tbl=pRuang; while(tbl&&tbl.localName!=='tbl')tbl=tbl.parentNode;
       var rows=_wEls(tbl,'tr').filter(function(tr){var p=tr.parentNode;return p===tbl;});
@@ -3866,11 +3871,11 @@ function buatDocxINM(data){
       while(dataRows.length<ruang.length){var c=dataRows[dataRows.length-1].cloneNode(true);rows[iJml].parentNode.insertBefore(c,rows[iJml]);dataRows.push(c);}
       dataRows.forEach(function(tr,i){
         var x=ruang[i]||{ruang:'',total:0,peluang:0,capaian:null}, tc=_wEls(tr,'tc');
-        var nilai=[String(x.ruang||'').toUpperCase(),String(x.total),String(x.peluang),x.peluang?_pas(x.capaian):'N/A'];
+        var nilai=[String(x.ruang||'').toUpperCase(),String(x.total),String(x.peluang),x.peluang?_pas(x.capaian,sat):'N/A'];
         tc.forEach(function(cell,j){var p=cell.getElementsByTagNameNS(W_NS,'p')[0];if(p&&j<4)_isiP(p,nilai[j]);});
       });
       var jt=_wEls(rows[iJml],'tc'), ft=data.formATotal||{};
-      [null,String(ft.total||0),String(ft.peluang||0),ft.peluang?_pas(ft.capaian):'N/A'].forEach(function(v,j){if(v!==null&&jt[j])_isiP(jt[j].getElementsByTagNameNS(W_NS,'p')[0],v);});
+      [null,String(ft.total||0),String(ft.peluang||0),ft.peluang?_pas(ft.capaian,sat):'N/A'].forEach(function(v,j){if(v!==null&&jt[j])_isiP(jt[j].getElementsByTagNameNS(W_NS,'p')[0],v);});
       // ---- tanda tangan (Form A & B) ----
       var ganti=function(p,lama,baru){_runTeks(p).forEach(function(r){var ts=_wEls(r,'t');ts.forEach(function(tt){if(tt.textContent===lama)tt.textContent=baru;});});};
       var tglRun=function(p){var rs=_runTeks(p);if(rs.length<6)return;
@@ -3887,17 +3892,16 @@ function buatDocxINM(data){
       // ---- FORM B ----
       setP(function(s){return /^: *Keptauhan Kebersihan Tangan$/.test(s);},': '+judul,0);
       var b=data.formB||{};
-      if(apd){
-        setP(function(s){return s===': TOTAL KEBERSIHAN TANGAN YANG DILAKUKAN';},': JUMLAH PETUGAS KESEHATAN YANG MENGGUNAKAN APD SESUAI INDIKASI DAN STANDAR',0);
-        setP(function(s){return s===': TOTAL PELUANG KEBERSIHAN TANGAN';},': JUMLAH PETUGAS YANG DIAMATI',0);
-        setP(function(s){return s==='85 %';},'100 %',0);
-      }
+      if(data.numB)setP(function(s){return s===': TOTAL KEBERSIHAN TANGAN YANG DILAKUKAN';},': '+data.numB,0);
+      if(data.denB)setP(function(s){return s===': TOTAL PELUANG KEBERSIHAN TANGAN';},': '+data.denB,0);
+      if(data.target)setP(function(s){return s==='85 %';},data.target,0);
       var pF=_cariP(doc,function(s){return /^\(\d+ \/ \d+ \) x 100% = /.test(s);});
       if(pF){var rs=_runTeks(pF);_wEls(rs[1],'t')[0].textContent=String(ft.total||0);_wEls(rs[3],'t')[0].textContent=String(ft.peluang||0);
-        _wEls(rs[7],'t')[0].textContent=ft.peluang?Number(ft.capaian).toFixed(2)+' ':'N/A';_wEls(rs[8],'t')[0].textContent=ft.peluang?'%':'';}
+        if(pengali!==100||sat!=='%')_wEls(rs[6],'t')[0].textContent=' x '+pengali+(sat==='%'?'%':'')+' = ';
+        _wEls(rs[7],'t')[0].textContent=ft.peluang?Number(ft.capaian).toFixed(2)+' ':'N/A';_wEls(rs[8],'t')[0].textContent=ft.peluang?sat:'';}
       // Hasil capaian Form B: paragraf "63.46 %" setelah judul HASIL CAPAIAN INDIAKTOR MUTU
       var pHasilJudul=_cariP(doc,function(s){return s==='HASIL CAPAIAN INDIAKTOR MUTU';});
-      if(pHasilJudul){var tr=pHasilJudul;while(tr&&tr.localName!=='tr')tr=tr.parentNode;var c2=_wEls(tr,'tc')[1];if(c2)_isiP(c2.getElementsByTagNameNS(W_NS,'p')[0],ft.peluang?_pas(ft.capaian):'N/A');}
+      if(pHasilJudul){var tr=pHasilJudul;while(tr&&tr.localName!=='tr')tr=tr.parentNode;var c2=_wEls(tr,'tc')[1];if(c2)_isiP(c2.getElementsByTagNameNS(W_NS,'p')[0],ft.peluang?_pas(ft.capaian,sat):'N/A');}
       // ---- ANALISA & REKOMENDASI: paragraf diganti, gaya paragraf contoh dari template dipakai ulang ----
       var isiSel=function(judulSel,baris,pilihContoh){
         var pj=_cariP(doc,function(s){return s===judulSel;}); if(!pj)return;
@@ -3929,28 +3933,33 @@ function _ttdINMDefault(){
   try{var s=JSON.parse(localStorage.getItem('sippi_ttd_inm')||'null');if(s){for(var k in s)if(k!=='tanggal')d[k]=s[k];}}catch(e){}
   return d;
 }
-/* Tombol "Form A & B (PMKP)" di Laporan RS HH/APD */
-function dlgFormINM(r,kode){
-  var d=_ttdINMDefault();
-  modal('Form A & B — format Komite PMKP',
-    '<p class="small muted mb">Dibuat dari template Word resmi (format tidak diubah). Angka diambil dari laporan bulan ini; Analisa & Rekomendasi dari isian Form B di layar.</p>'+
-    '<div class="row"><div class="field"><label>Tempat</label><input id="inmTempat" value="'+esc(d.tempat)+'"></div>'+
+/* Label Form A/B per jenis survei observasi (HH = teks template apa adanya). */
+function _labelINMObs(kode,r){
+  if(kode==='HH')return {judul:'Kepatuhan Kebersihan Tangan'};
+  if(kode==='APD')return {judul:'Kepatuhan Penggunaan Alat Pelindung Diri (APD)',kolA1:'JUMLAH PETUGAS YANG MENGGUNAKAN APD SESUAI STANDAR',kolA2:'JUMLAH PETUGAS YANG DIAMATI',
+    numB:'JUMLAH PETUGAS KESEHATAN YANG MENGGUNAKAN APD SESUAI INDIKASI DAN STANDAR',denB:'JUMLAH PETUGAS YANG DIAMATI',target:'100 %'};
+  return {judul:_judulObs(kode,r),kolA1:'JUMLAH TINDAKAN YANG PATUH BUNDLE',kolA2:'JUMLAH TINDAKAN YANG DIOBSERVASI',
+    numB:'JUMLAH TINDAKAN YANG MENERAPKAN SELURUH ELEMEN BUNDLE',denB:'JUMLAH TINDAKAN YANG DIOBSERVASI',target:'100 %'};
+}
+function _htmlTtdINM(d){
+  return '<div class="row"><div class="field"><label>Tempat</label><input id="inmTempat" value="'+esc(d.tempat)+'"></div>'+
       '<div class="field"><label>Tanggal laporan</label><input type="date" id="inmTgl" value="'+esc(d.tanggal)+'"></div></div>'+
     '<div class="row"><div class="field"><label>Penanggung Jawab Data</label><input id="inmPjNama" value="'+esc(d.pj_nama)+'"></div>'+
       '<div class="field"><label>NIP</label><input id="inmPjNip" value="'+esc(d.pj_nip)+'"></div></div>'+
     '<div class="row"><div class="field"><label>Pengumpul Data (Form A)</label><input id="inmPgNama" value="'+esc(d.pg_nama)+'"></div>'+
       '<div class="field"><label>NIP</label><input id="inmPgNip" value="'+esc(d.pg_nip)+'"></div></div>'+
     '<div class="flex wrap" style="gap:8px"><button class="btn ghost" id="inmLihat">Lihat</button><button class="btn ghost" id="inmCetak">Cetak</button><button class="btn" id="inmUnduh">Unduh Word (.docx)</button></div>'+
-    '<div id="inmPesan" class="small mt"></div>',null,'Tutup');
-  var ambil=function(){
-    var t={tempat:$('#inmTempat').value.trim()||'Muara Badak',tanggal:$('#inmTgl').value||todayISO(),pj_nama:$('#inmPjNama').value.trim(),pj_nip:$('#inmPjNip').value.trim(),pg_nama:$('#inmPgNama').value.trim(),pg_nip:$('#inmPgNip').value.trim()};
-    try{localStorage.setItem('sippi_ttd_inm',JSON.stringify(t));}catch(e){}
-    var an=$('#fbAnalisa'), rk=$('#fbRekomendasi');
-    return {kode:kode,namaBulan:r.namaBulan,tahun:r.tahun,formA:r.formA,formATotal:r.formATotal,formB:r.formB,
-      analisa:an?an.value:(r.formB.analisa||''),rekomendasi:rk?rk.value:(r.formB.rekomendasi||''),ttd:t};
-  };
-  var nama=function(){return 'Form A & B - '+(kode==='APD'?'Kepatuhan APD':'Kepatuhan Kebersihan Tangan')+' - '+r.namaBulan+' '+r.tahun+'.docx';};
-  var pesan=function(t,err){var e=$('#inmPesan');if(e)e.innerHTML='<span style="color:'+(err?'var(--danger)':'var(--muted)')+'">'+esc(t)+'</span>';};
+    '<div id="inmPesan" class="small mt"></div>';
+}
+function _ambilTtdINM(){
+  var t={tempat:$('#inmTempat').value.trim()||'Muara Badak',tanggal:$('#inmTgl').value||todayISO(),pj_nama:$('#inmPjNama').value.trim(),pj_nip:$('#inmPjNip').value.trim(),pg_nama:$('#inmPgNama').value.trim(),pg_nip:$('#inmPgNip').value.trim()};
+  try{localStorage.setItem('sippi_ttd_inm',JSON.stringify(t));}catch(e){}
+  return t;
+}
+function _pesanINM(t,err){var e=$('#inmPesan');if(e)e.innerHTML='<span style="color:'+(err?'var(--danger)':'var(--muted)')+'">'+esc(t)+'</span>';}
+/* Tombol Lihat / Cetak / Unduh Word — ambil() mengembalikan data buatDocxINM, nama() nama file. */
+function _pasangAksiINM(ambil,nama){
+  var pesan=_pesanINM;
   $('#inmUnduh').onclick=function(){pesan('Menyusun dokumen…');buatDocxINM(ambil()).then(function(blob){
     var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=nama();document.body.appendChild(a);a.click();a.remove();
     setTimeout(function(){URL.revokeObjectURL(url);},60000);pesan('File Word diunduh ✓');}).catch(function(e){pesan('Gagal: '+(e&&e.message||e),true);});};
@@ -3972,6 +3981,96 @@ function dlgFormINM(r,kode){
   };
   $('#inmLihat').onclick=function(){tampil(false);};
   $('#inmCetak').onclick=function(){tampil(true);};
+}
+/* Tombol "Form A & B (PMKP)" di Laporan RS survei observasi (HH, APD, Bundle) */
+function dlgFormINM(r,kode){
+  var L=_labelINMObs(kode,r);
+  modal('Form A & B — format Komite PMKP',
+    '<p class="small muted mb">Dibuat dari template Word resmi (format tidak diubah). Angka diambil dari laporan bulan ini; Analisa & Rekomendasi dari isian Form B di layar.</p>'+
+    _htmlTtdINM(_ttdINMDefault()),null,'Tutup');
+  _pasangAksiINM(function(){
+    var t=_ambilTtdINM(), an=$('#fbAnalisa'), rk=$('#fbRekomendasi'), d={kode:kode,namaBulan:r.namaBulan,tahun:r.tahun,formA:r.formA,formATotal:r.formATotal,formB:r.formB,
+      analisa:an?an.value:(r.formB.analisa||''),rekomendasi:rk?rk.value:(r.formB.rekomendasi||''),ttd:t};
+    for(var k in L)d[k]=L[k]; return d;
+  },function(){return 'Form A & B - '+(kode==='APD'?'Kepatuhan APD':L.judul)+' - '+r.namaBulan+' '+r.tahun+'.docx';});
+}
+
+/* ---- Form A & B Surveilans HAIs: satu indikator (kejadian / tindakan) per dokumen ---- */
+/* Standar awal (dapat diubah di dialog; perubahan diingat per indikator di perangkat ini). */
+function _standarHAIs(label){
+  var s=String(label||'');
+  if(/phl?ebitis|plebitis/i.test(s))return '≤ 1 ‰';
+  if(/\bISK\b/i.test(s))return '≤ 4,7 ‰';
+  if(/\bIDO\b/i.test(s))return '≤ 2 %';
+  if(/\bVAP\b/i.test(s))return '≤ 5,8 ‰';
+  if(/IADP|CLABSI/i.test(s))return '≤ 3,5 ‰';
+  if(/dec?ubitus|dekubitus/i.test(s))return '≤ 1,5 ‰';
+  return '';
+}
+function _namaHAI(label){return String(label||'').replace(/^jumlah\s+(kejadian\s+)?/i,'').trim();}
+function _angkaStandar(t){var m=String(t||'').replace(',','.').match(/(\d+(\.\d+)?)/);return m?Number(m[1]):null;}
+function _dataINMHais(r,ind){
+  var sat=String(ind.satuan||'‰').trim()||'‰', peng=Number(ind.pengali)||1000, hit=function(a,b){return b>0?Math.round(a/b*peng*100)/100:null;};
+  var formA=r.ruangan.map(function(row){var m=row.mentah[ind.field_id]||{tindakan:0,kejadian:0};return {ruang:row.nama,total:m.kejadian,peluang:m.tindakan,capaian:hit(m.kejadian,m.tindakan)};});
+  var tk=formA.reduce(function(a,x){return a+x.total;},0), tt=formA.reduce(function(a,x){return a+x.peluang;},0);
+  var nama=_namaHAI(ind.label), den=String(ind.pasangan_label||('Jumlah hari pemakaian / tindakan '+nama)).replace(/^jumlah\s+/i,'');
+  return {judul:'Angka Kejadian '+nama, satuan:sat, pengali:peng, formA:formA, formATotal:{total:tk,peluang:tt,capaian:hit(tk,tt)},
+    kolA1:('JUMLAH KEJADIAN '+nama).toUpperCase(), kolA2:('JUMLAH '+den).toUpperCase(),
+    numB:('JUMLAH KEJADIAN '+nama).toUpperCase(), denB:('JUMLAH '+den).toUpperCase()};
+}
+function _drafAnalisaHais(r,d,target){
+  var ft=d.formATotal, per=bulanPanjangID(r.periode), f=function(x){return x===null?'N/A':Number(x).toFixed(2)+' '+d.satuan;};
+  if(!ft.peluang)return 'Belum ada data '+d.kolA2.toLowerCase()+' pada bulan '+per+'.';
+  var s='Hasil capaian '+d.judul+' pada bulan '+per+' adalah '+f(ft.capaian)+' ('+ft.total+' kejadian dari '+ft.peluang+' '+d.kolA2.replace(/^JUMLAH /,'').toLowerCase()+').';
+  var std=_angkaStandar(target);
+  if(std!==null)s+=ft.capaian<=std?' Angka ini sudah memenuhi standar yang ditetapkan, yaitu '+target+'.':' Angka ini belum memenuhi standar yang ditetapkan, yaitu '+target+'. Hal ini disebabkan oleh: (lengkapi)';
+  var ada=d.formA.filter(function(x){return x.total>0;});
+  if(ada.length)s+='\n\nKejadian ditemukan di ruang: '+ada.map(function(x){return x.ruang+' '+x.total+' kejadian ('+f(x.capaian)+')';}).join(', ')+'.';
+  else s+='\n\nTidak ditemukan kejadian di seluruh ruangan.';
+  return s;
+}
+function dlgFormINMHais(r){
+  var list=(r.indikator||[]).filter(function(x){return x.pasangan_field_id;});
+  if(!list.length){toast('Survei ini belum punya indikator kejadian dengan pasangan tindakan.','err');return;}
+  var stdSimpan={}; try{stdSimpan=JSON.parse(localStorage.getItem('sippi_std_hais')||'{}')||{};}catch(e){}
+  var tanpa=(r.indikator||[]).filter(function(x){return !x.pasangan_field_id;}).map(function(x){return _namaHAI(x.label);});
+  modal('Form A & B — format Komite PMKP',
+    '<p class="small muted mb">Dibuat dari template Word resmi (format tidak diubah). Satu dokumen untuk satu indikator; angka per ruangan diambil dari laporan bulan ini.'+
+      (tanpa.length?' '+esc(tanpa.join(' & '))+' tidak dibuatkan Form A & B karena dilaporkan sebagai jumlah kasus (tanpa penyebut).':'')+'</p>'+
+    '<div class="row"><div class="field"><label>Indikator</label><select id="inmInd">'+list.map(function(x,i){return '<option value="'+i+'">'+esc(_namaHAI(x.label))+'</option>';}).join('')+'</select></div>'+
+      '<div class="field"><label>Target / standar</label><input id="inmStd" placeholder="mis. ≤ 1 ‰"></div></div>'+
+    '<div class="field"><label>Analisa</label><textarea id="inmAnalisa" rows="7"></textarea><div class="small muted" id="inmAnInfo"></div></div>'+
+    '<div class="field"><label>Rekomendasi (satu baris satu poin)</label><textarea id="inmRek" rows="4"></textarea></div>'+
+    '<div class="flex wrap mb" style="gap:8px"><button class="btn teal sm" id="inmSimpanAn">Simpan Analisa &amp; Rekomendasi</button></div>'+
+    _htmlTtdINM(_ttdINMDefault()),null,'Tutup');
+  var bt=r.periode.split('-'), th=Number(bt[0]), bl=Number(bt[1]);
+  var ind=function(){return list[Number($('#inmInd').value)||0];};
+  var kodeCat=function(){return 'HAIS:'+ind().field_id;};
+  var isiInd=function(){
+    var x=ind(), d=_dataINMHais(r,x);
+    $('#inmStd').value=stdSimpan[x.label]||_standarHAIs(x.label);
+    $('#inmAnalisa').value=_drafAnalisaHais(r,d,$('#inmStd').value); $('#inmRek').value='';
+    $('#inmAnInfo').textContent='Draf otomatis — periksa dan lengkapi.';
+    var kc=kodeCat();
+    call('getCatatanLaporan',S.token,kc,bl,th).then(function(c){
+      if(kc!==kodeCat()||!c||!c.ok||!c.ada)return;
+      if(c.analisa.trim()){$('#inmAnalisa').value=c.analisa;$('#inmAnInfo').textContent='Analisa tersimpan sebelumnya.';}
+      $('#inmRek').value=c.rekomendasi||'';
+    }).catch(function(){});
+  };
+  $('#inmInd').onchange=isiInd; isiInd();
+  $('#inmStd').onchange=function(){stdSimpan[ind().label]=$('#inmStd').value.trim();try{localStorage.setItem('sippi_std_hais',JSON.stringify(stdSimpan));}catch(e){}};
+  $('#inmSimpanAn').onclick=function(){
+    _pesanINM('Menyimpan…');
+    call('simpanCatatanLaporan',S.token,kodeCat(),bl,th,$('#inmAnalisa').value,$('#inmRek').value).then(function(res){
+      if(res&&res.ok){_pesanINM('Analisa & rekomendasi tersimpan ✓');$('#inmAnInfo').textContent='Analisa tersimpan.';}else _pesanINM((res&&res.pesan)||'Gagal menyimpan.',true);
+    }).catch(function(e){_pesanINM('Gagal: '+((e&&e.message)||e),true);});
+  };
+  _pasangAksiINM(function(){
+    var d=_dataINMHais(r,ind()); d.kode='HAIS'; d.namaBulan=BULAN_ID[bl-1]; d.tahun=th;
+    d.target=$('#inmStd').value.trim()||'-'; d.analisa=$('#inmAnalisa').value; d.rekomendasi=$('#inmRek').value; d.ttd=_ambilTtdINM();
+    return d;
+  },function(){return 'Form A & B - '+_dataINMHais(r,ind()).judul+' - '+BULAN_ID[bl-1]+' '+th+'.docx';});
 }
 
 /* Dipanggil halaman tambahan (Rekap Data Pasien, Bundle): data tabel dari server -> PDF. */
