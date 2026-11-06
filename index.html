@@ -559,6 +559,8 @@
   .ttd-pad.terisi .ttd-hint{display:none}
   .ttd-pad.belum{border-color:var(--danger,#c0392b);background:#fff6f5}
   .otb-ttd img{height:38px;max-width:110px;object-fit:contain;cursor:zoom-in;background:#fff;border:1px solid #e3e9ee;border-radius:4px}
+  .lp-ttd td{vertical-align:middle}
+  .lp-ttd-sel img{height:40px;max-width:130px;object-fit:contain;cursor:zoom-in;display:block;margin:0 auto}
   .otb-foto{display:flex;gap:4px;flex-wrap:nowrap}
   .otb-foto img{width:44px;height:44px;object-fit:cover;border-radius:4px;border:1px solid #d5dde3;cursor:zoom-in}
   .otb-foto .ol-foto-muat{width:44px;height:44px}
@@ -617,7 +619,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.06.1';
+var VERSI_TAMPILAN='2026.11.06.2';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -2312,13 +2314,18 @@ function renderLaporanObservasi(area,r,kode){
       '<div class="lp-sign"><div class="blok">Penanggung Jawab Data<br>Komite PPI<div class="sp"></div><b>(____________________________)</b></div></div>'+
       '<div class="lp-foot-note">Tanda tangan diatur saat Unduh PDF. Dibuat melalui SIPPI AMI pada '+fmtID(todayISO())+'.</div>'+
     '</div>';
+  var h4='<div class="lp-page">'+subHead+
+      '<h3 class="lp-h">Lampiran — Daftar Petugas yang Diedukasi</h3>'+
+      '<div class="small muted mb">Bukti edukasi / umpan balik hasil observasi '+esc(judul)+' bulan '+esc(per)+', ditandatangani petugas yang diobservasi.</div>'+
+      '<div id="lpTtdIsi"><div class="spinner"></div></div>'+
+    '</div>';
   area.innerHTML=
     '<div class="flex between mb"><div></div><div class="lp-toolbar">'+
       '<button class="btn ghost sm" id="lpUlang">Ganti Bulan / Survei</button>'+
       '<button class="btn teal sm" id="fbSimpan">Simpan Form B</button>'+
       '<button class="btn ghost sm" id="btnINM">Form A &amp; B (PMKP)</button>'+
       '<button class="btn sm" id="obsPdf">Unduh PDF</button></div></div>'+
-    '<div class="lp-sheet" id="lpSheet">'+h1+h2+h3+'</div>';
+    '<div class="lp-sheet" id="lpSheet">'+h1+h2+h3+h4+'</div>';
   $('#lpUlang').onclick=function(){ area.innerHTML=''; };
   var sheet=$('#lpSheet');
   $('#btnINM').onclick=function(){ dlgFormINM(r,kode); };
@@ -2330,9 +2337,16 @@ function renderLaporanObservasi(area,r,kode){
     plugins:[labelNilaiBatang],
     options:{responsive:true,layout:{padding:{top:16}},plugins:{labelNilai:{persen:true},legend:{display:false}},scales:{y:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}},grid:{color:'#E4ECEA'}},x:{grid:{display:false}}}}});
 
+  // Lampiran tanda tangan dimuat terpisah (gambar tidak ikut cache rekap)
+  var ttdP=call('getTtdEdukasiBulan',S.token,kode,r.bulan,r.tahun).then(function(h){return h&&h.ok?h.list:null;},function(){return null;});
+  ttdP.then(function(list){var el=$('#lpTtdIsi');if(el)el.innerHTML=htmlLampiranTtd(list);});
   $('#obsPdf').onclick=function(){
-    ppiPDF({konten:kontenLaporanObservasi(r,kode),judul:'Laporan '+judul,sub:'Bulan '+r.namaBulan+' '+r.tahun+' · Semua Unit Pelayanan',orientasi:'portrait',
-      namaFile:'Laporan '+judul+' '+r.namaBulan+' '+r.tahun});
+    var b=this; b.disabled=true;
+    ttdP.then(function(list){
+      b.disabled=false;
+      ppiPDF({konten:kontenLaporanObservasi(r,kode),judul:'Laporan '+judul,sub:'Bulan '+r.namaBulan+' '+r.tahun+' · Semua Unit Pelayanan',orientasi:'portrait',
+        namaFile:'Laporan '+judul+' '+r.namaBulan+' '+r.tahun,lampiran:kontenLampiranTtd(list,judul,per)});
+    });
   };
   $('#fbSimpan').onclick=function(){
     call('simpanCatatanLaporan',S.token,kode,r.bulan,r.tahun,$('#fbAnalisa').value,$('#fbRekomendasi').value).then(function(res){
@@ -3579,6 +3593,31 @@ function kontenPerProfesi(r,kode,huruf){
   }
   return k;
 }
+/* ===== Lampiran laporan HH/APD/Bundle: daftar petugas yang diedukasi + tanda tangan ===== */
+function htmlLampiranTtd(list){
+  if(!list)return PESAN_SERVER_LAMA;
+  if(!list.length)return '<div class="desc">Belum ada observasi pada bulan ini.</div>';
+  var ada=list.filter(function(o){return o.ttd;}).length;
+  return '<div class="small mb">'+list.length+' petugas diobservasi · <b>'+ada+'</b> bertanda tangan'+(ada<list.length?' · '+(list.length-ada)+' tanpa tanda tangan (diinput sebelum fitur tanda tangan ada)':'')+'</div>'+
+    '<table class="lp-tabel lp-ttd"><thead><tr><th>No</th><th>Tanggal</th><th>Ruang</th><th>Nama Petugas</th><th>Profesi</th><th>Hasil</th><th>Tanda Tangan</th></tr></thead><tbody>'+
+    list.map(function(o,i){
+      return '<tr><td>'+(i+1)+'</td><td>'+esc(fmtID(o.tanggal))+'</td><td class="left">'+esc(o.ruangan)+'</td><td class="left"><b>'+esc(o.nama_petugas)+'</b></td>'+
+        '<td class="left">'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td><td>'+esc(o.kepatuhan)+'</td>'+
+        '<td class="lp-ttd-sel">'+(o.ttd?'<img src="'+o.ttd+'" alt="Tanda tangan" data-nama="'+esc(o.nama_petugas)+'" onclick="lihatTtdEdukasi(this.src,this.dataset.nama)">':'<span class="muted">-</span>')+'</td></tr>';
+    }).join('')+'</tbody></table>';
+}
+function kontenLampiranTtd(list,judul,per){
+  if(!list||!list.length)return [];
+  var rows=list.map(function(o,i){
+    return [i+1,fmtID(o.tanggal),o.ruangan,o.nama_petugas,o.profesi?normProfesi(o.profesi):'-',
+      {text:o.kepatuhan,alignment:'center',bold:true,color:o.kepatuhan==='Patuh'?'#2f7a12':'#b0331f'},
+      o.ttd?{image:o.ttd,fit:[92,30],alignment:'center'}:{text:'-',alignment:'center',color:'#9aa6b0'}];
+  });
+  return [fJudul('','LAMPIRAN — Daftar Petugas yang Diedukasi','portrait'),
+    fCatatan('Bukti edukasi / umpan balik hasil observasi '+judul+' bulan '+per+', ditandatangani petugas yang diobservasi. '+list.length+' petugas.'),
+    fTabel(['No','Tanggal','Ruang','Nama Petugas','Profesi','Hasil','Tanda Tangan'],rows,{kiri:[2,3,4],widths:[20,52,'*','*',70,48,100],font:8})];
+}
+
 /* ===== Lampiran Laporan Bulanan HH/APD: rincian tiap observasi per petugas ===== */
 function _kegTeks(o){return [o.kegiatan,o.kewaspadaan?'Kewaspadaan '+o.kewaspadaan:''].filter(Boolean).join(' · ')||'-';}
 /* HH: hanya 5 momen yang dihitung sebagai peluang; "6 langkah cuci tangan" dicatat terpisah. */
