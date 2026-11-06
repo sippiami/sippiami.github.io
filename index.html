@@ -552,6 +552,13 @@
   .otb tbody tr:nth-child(even) td{background-color:#fafbfc}.otb tbody tr:nth-child(even) td.tidak{background:#fdf1ef}
   .otb-status{font-weight:700;font-size:12px}.otb-status.ya{color:#2f7a12}.otb-status.tidak{color:#b0331f}
   .otb-ket{min-width:160px;max-width:260px}
+  .ttd-pad{position:relative;height:170px;border:1.5px dashed #9fb3c2;border-radius:10px;background:#fbfdfe;overflow:hidden}
+  .ttd-pad canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+  .ttd-pad .ttd-garis{position:absolute;left:18px;right:18px;bottom:36px;border-bottom:1px solid #c9d6df;pointer-events:none}
+  .ttd-pad .ttd-hint{position:absolute;left:0;right:0;bottom:12px;text-align:center;font-size:.78rem;color:#8a9aa6;pointer-events:none}
+  .ttd-pad.terisi .ttd-hint{display:none}
+  .ttd-pad.belum{border-color:var(--danger,#c0392b);background:#fff6f5}
+  .otb-ttd img{height:38px;max-width:110px;object-fit:contain;cursor:zoom-in;background:#fff;border:1px solid #e3e9ee;border-radius:4px}
   .otb-foto{display:flex;gap:4px;flex-wrap:nowrap}
   .otb-foto img{width:44px;height:44px;object-fit:cover;border-radius:4px;border:1px solid #d5dde3;cursor:zoom-in}
   .otb-foto .ol-foto-muat{width:44px;height:44px}
@@ -610,7 +617,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.03.5';
+var VERSI_TAMPILAN='2026.11.06.1';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -2399,6 +2406,10 @@ function renderObsStep1(area){
         '<div class="foto-grid" id="obsFotoGrid"></div></div>'+
       '<div class="field mt"><label>'+(st.kode==='APD'?'Temuan':'Alasan ketidakpatuhan')+' (opsional)</label>'+
         '<textarea id="obsCatatan" rows="2" placeholder="Catatan tambahan bila ada..."></textarea></div>'+
+      '<div class="field mt"><label>Tanda tangan petugas yang diedukasi <span style="color:var(--danger)">*</span></label>'+
+        '<div class="ttd-pad" id="obsTtdWrap"><canvas id="obsTtd" aria-label="Kotak tanda tangan"></canvas><div class="ttd-garis"></div><div class="ttd-hint">Petugas tanda tangan di sini (pakai jari / stylus)</div></div>'+
+        '<div class="flex between mt" style="gap:8px;align-items:center"><span class="small muted">Bukti petugas telah menerima edukasi / umpan balik hasil observasi.</span>'+
+        '<button type="button" class="btn ghost sm" id="obsTtdUlang">Ulangi</button></div></div>'+
       '<button class="btn teal" id="obsSimpan" style="width:100%">Simpan observasi</button>'+
     '</div>'+
     '<div id="obsLogArea"></div>';
@@ -2449,6 +2460,9 @@ function renderObsStep1(area){
   };
   $('#obsGaleri').onchange=function(){tambahFoto(this);};
   gambarFoto();
+  var padTtd=PadTtd($('#obsTtd'));
+  $('#obsTtdUlang').onclick=function(){padTtd.hapus();};
+  $('#obsTtd').addEventListener('pointerdown',function(){$('#obsTtdWrap').classList.remove('belum');});
   $('#obsSimpan').onclick=function(){
     var btn=this;
     if(!$('#obsNama').value.trim()){toast('Nama petugas wajib diisi.','err');$('#obsNama').focus();return;}
@@ -2457,6 +2471,7 @@ function renderObsStep1(area){
     if(belum.length){toast(belum.length+' '+(st.kode==='HH'?'momen':'item')+' belum dinilai (pilih N/A bila tidak berlaku).','err');belum[0].scrollIntoView({behavior:'smooth',block:'center'});return;}
     var jawaban=sv.fields.map(function(f){return {field_id:f.field_id,nilai:st.jawaban[f.field_id]};}).filter(function(j){return j.nilai;});
     if(!jawaban.length){toast('Minimal satu '+(st.kode==='HH'?'momen':'item')+' harus dinilai (bukan N/A semua).','err');return;}
+    if(padTtd.kosong()){$('#obsTtdWrap').classList.add('belum');toast('Tanda tangan petugas yang diedukasi wajib diisi.','err');$('#obsTtdWrap').scrollIntoView({behavior:'smooth',block:'center'});return;}
     var kegPilih=sv.kegiatan?$('#obsKegiatan').value:'';
     var prof=$('#obsProfesi').value;
     if(prof==='Lainnya'){var pl=$('#obsProfesiLain').value.trim();if(!pl){toast('Tulis profesi petugas pada kolom "Profesi lainnya".','err');$('#obsProfesiLain').focus();return;}
@@ -2467,7 +2482,7 @@ function renderObsStep1(area){
       nama_petugas:$('#obsNama').value.trim(), profesi:st.identitas.profesi,
       kegiatan:sv.kegiatan?(kegPilih==='Lainnya'?$('#obsKegiatanLain').value.trim():kegPilih):'',
       kewaspadaan:$('#obsKewaspadaan')?$('#obsKewaspadaan').value:'',
-      jawaban:jawaban, catatan:$('#obsCatatan').value.trim(), foto:st.foto.slice()
+      jawaban:jawaban, catatan:$('#obsCatatan').value.trim(), foto:st.foto.slice(), ttd:padTtd.ambil()
     };
     btn.disabled=true; btn.textContent=payload.foto.length?'Mengunggah foto & menyimpan…':'Menyimpan…';
     Promise.all(payload.foto.map(buatThumb)).then(function(t){payload.thumb=t.filter(Boolean);return call('simpanObservasi',S.token,payload);}).then(function(r){
@@ -2499,7 +2514,7 @@ function loadObsLog(){
         '<th rowspan="2" class="otb-c">No</th><th rowspan="2" class="otb-c">Jam</th>'+(adaRuang?'<th rowspan="2">Ruang</th>':'')+'<th rowspan="2">Nama Petugas</th><th rowspan="2">Profesi</th>'+
         (st.sv.kegiatan?'<th rowspan="2">Kegiatan</th>':'')+
         '<th colspan="'+F.length+'" class="otb-c">'+(st.kode==='HH'?'Momen':'Item')+'</th>'+
-        '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(st.kode==='APD'?'Temuan':'Keterangan')+'</th><th rowspan="2">Foto</th><th rowspan="2" class="otb-c">Aksi</th></tr>'+
+        '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(st.kode==='APD'?'Temuan':'Keterangan')+'</th><th rowspan="2">Foto</th><th rowspan="2" class="otb-c">TTD Petugas</th><th rowspan="2" class="otb-c">Aksi</th></tr>'+
         '<tr>'+F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
       list.map(function(o,n){
         return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td>'+(adaRuang?'<td>'+esc(o.ruangan||'-')+'</td>':'')+'<td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
@@ -2511,9 +2526,10 @@ function loadObsLog(){
             (o.jumlah_foto?(o.thumb||[]).map(function(d,i){return '<img src="'+d+'" alt="Foto '+(i+1)+'" onclick="lihatFotoObs(\''+o.entry_id+'\')">';}).join('')+
               (o.thumb_kurang?Array(Math.max(0,o.jumlah_foto-(o.thumb||[]).length)).fill('<span class="ol-foto-muat"></span>').join(''):'')
             :'<span class="muted">-</span>')+'</div></td>'+
+          '<td class="otb-c otb-ttd">'+(o.ttd?'<img src="'+o.ttd+'" alt="Tanda tangan" data-nama="'+esc(o.nama_petugas)+'" onclick="lihatTtdEdukasi(this.src,this.dataset.nama)">':'<span class="muted">-</span>')+'</td>'+
           '<td class="otb-c"><button class="btn ghost sm" onclick="hapusBarisObs(\''+o.entry_id+'\')">Hapus</button></td></tr>';
       }).join('')+'</tbody></table></div>'+
-      '<div class="otb-ket-bawah"><b>Keterangan:</b> ✓ = Patuh · ✗ = Tidak patuh · – = Tidak dinilai (N/A). Ketuk foto untuk memperbesar.<ol>'+
+      '<div class="otb-ket-bawah"><b>Keterangan:</b> ✓ = Patuh · ✗ = Tidak patuh · – = Tidak dinilai (N/A). Ketuk foto / tanda tangan untuk memperbesar.<ol>'+
         F.map(function(f){return '<li>'+esc(f.label)+'</li>';}).join('')+'</ol></div></div>';
     // foto lama yang belum punya gambar kecil -> buatkan dari Drive
     var kurang=list.filter(function(o){return o.thumb_kurang;}).map(function(o){return o.entry_id;});
@@ -2522,6 +2538,60 @@ function loadObsLog(){
         box.innerHTML=(h[id]||[]).map(function(d,i){return '<img src="'+d+'" alt="Foto '+(i+1)+'" onclick="lihatFotoObs(\''+id+'\')">';}).join('')||'<span class="small muted">Foto tidak ditemukan</span>';});
     }).catch(function(){$all('.ol-foto-muat').forEach(function(x){x.classList.add('gagal');});});
   });
+}
+/* Kotak tanda tangan (jari / stylus / mouse). ambil() -> PNG kecil yang sudah dipotong rapat. */
+function PadTtd(cv) {
+  var ctx = cv.getContext('2d'), aktif = false, ada = false, akhir = null, W = 0;
+  function siapkan() {
+    var r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (!r.width) return;
+    W = r.width; cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0b2a5b'; ctx.fillStyle = '#0b2a5b';
+    ada = false; if (cv.parentNode) cv.parentNode.classList.remove('terisi');
+  }
+  function pos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  cv.style.touchAction = 'none';
+  cv.addEventListener('pointerdown', function (e) {
+    if (!W) siapkan();
+    e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+    aktif = true; akhir = pos(e);
+    ctx.beginPath(); ctx.arc(akhir.x, akhir.y, 1.2, 0, 7); ctx.fill();
+    ada = true; if (cv.parentNode) cv.parentNode.classList.add('terisi');
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!aktif) return; e.preventDefault();
+    var p = pos(e); ctx.beginPath(); ctx.moveTo(akhir.x, akhir.y); ctx.lineTo(p.x, p.y); ctx.stroke(); akhir = p;
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (n) { cv.addEventListener(n, function () { aktif = false; }); });
+  window.addEventListener('resize', function () { var r = cv.getBoundingClientRect(); if (!ada && r.width && Math.abs(r.width - W) > 2) siapkan(); });
+  siapkan();
+  return {
+    kosong: function () { return !ada; },
+    hapus: siapkan,
+    ambil: function () {
+      var w = cv.width, h = cv.height, d = ctx.getImageData(0, 0, w, h).data, x0 = w, y0 = h, x1 = -1, y1 = -1;
+      for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 10) {
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+      if (x1 < 0) return '';
+      var m = 6; x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(w - 1, x1 + m); y1 = Math.min(h - 1, y1 + m);
+      var bw = x1 - x0 + 1, bh = y1 - y0 + 1, s = Math.min(1, 420 / bw, 150 / bh);
+      var o = document.createElement('canvas'); o.width = Math.max(1, Math.round(bw * s)); o.height = Math.max(1, Math.round(bh * s));
+      var oc = o.getContext('2d'); oc.imageSmoothingQuality = 'high'; oc.drawImage(cv, x0, y0, bw, bh, 0, 0, o.width, o.height);
+      var hasil = o.toDataURL('image/png');
+      if (hasil.length > 45000) {   // jarang: tanda tangan sangat rumit -> JPEG latar putih
+        var j = document.createElement('canvas'); j.width = o.width; j.height = o.height;
+        var jc = j.getContext('2d'); jc.fillStyle = '#fff'; jc.fillRect(0, 0, j.width, j.height); jc.drawImage(o, 0, 0);
+        hasil = j.toDataURL('image/jpeg', 0.6);
+      }
+      return hasil;
+    }
+  };
+}
+function lihatTtdEdukasi(src,nama){
+  modal('Tanda tangan petugas yang diedukasi','<div style="text-align:center"><div style="background:#fff;border:1px solid #e3e9ee;border-radius:8px;padding:16px">'+
+    '<img src="'+src+'" alt="Tanda tangan" style="max-width:100%;max-height:220px"></div><div class="mt"><b>'+esc(nama||'')+'</b></div></div>',null,'Tutup');
 }
 /* Gambar kecil (±200 px) dari foto, disimpan bersama observasi agar tabel bisa langsung menampilkan foto. */
 function buatThumb(dataUrl){
