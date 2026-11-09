@@ -619,7 +619,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.06.6';
+var VERSI_TAMPILAN='2026.11.09.1';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -2420,7 +2420,7 @@ function renderObsStep1(area){
         '<div class="foto-grid" id="obsFotoGrid"></div></div>'+
       '<div class="field mt"><label>'+(st.kode==='APD'?'Temuan':'Alasan ketidakpatuhan')+' (opsional)</label>'+
         '<textarea id="obsCatatan" rows="2" placeholder="Catatan tambahan bila ada..."></textarea></div>'+
-      '<div class="field mt"><label>Tanda tangan petugas yang diedukasi <span style="color:var(--danger)">*</span></label>'+
+      '<div class="field mt"><label>Tanda tangan petugas yang diedukasi (opsional)</label>'+
         '<div class="ttd-pad" id="obsTtdWrap"><canvas id="obsTtd" aria-label="Kotak tanda tangan"></canvas><div class="ttd-garis"></div><div class="ttd-hint">Petugas tanda tangan di sini (pakai jari / stylus)</div></div>'+
         '<div class="flex between mt" style="gap:8px;align-items:center"><span class="small muted">Bukti petugas telah menerima edukasi / umpan balik hasil observasi.</span>'+
         '<button type="button" class="btn ghost sm" id="obsTtdUlang">Ulangi</button></div></div>'+
@@ -2485,7 +2485,6 @@ function renderObsStep1(area){
     if(belum.length){toast(belum.length+' '+(st.kode==='HH'?'momen':'item')+' belum dinilai (pilih N/A bila tidak berlaku).','err');belum[0].scrollIntoView({behavior:'smooth',block:'center'});return;}
     var jawaban=sv.fields.map(function(f){return {field_id:f.field_id,nilai:st.jawaban[f.field_id]};}).filter(function(j){return j.nilai;});
     if(!jawaban.length){toast('Minimal satu '+(st.kode==='HH'?'momen':'item')+' harus dinilai (bukan N/A semua).','err');return;}
-    if(padTtd.kosong()){$('#obsTtdWrap').classList.add('belum');toast('Tanda tangan petugas yang diedukasi wajib diisi.','err');$('#obsTtdWrap').scrollIntoView({behavior:'smooth',block:'center'});return;}
     var kegPilih=sv.kegiatan?$('#obsKegiatan').value:'';
     var prof=$('#obsProfesi').value;
     if(prof==='Lainnya'){var pl=$('#obsProfesiLain').value.trim();if(!pl){toast('Tulis profesi petugas pada kolom "Profesi lainnya".','err');$('#obsProfesiLain').focus();return;}
@@ -2496,7 +2495,7 @@ function renderObsStep1(area){
       nama_petugas:$('#obsNama').value.trim(), profesi:st.identitas.profesi,
       kegiatan:sv.kegiatan?(kegPilih==='Lainnya'?$('#obsKegiatanLain').value.trim():kegPilih):'',
       kewaspadaan:$('#obsKewaspadaan')?$('#obsKewaspadaan').value:'',
-      jawaban:jawaban, catatan:$('#obsCatatan').value.trim(), foto:st.foto.slice(), ttd:padTtd.ambil()
+      jawaban:jawaban, catatan:$('#obsCatatan').value.trim(), foto:st.foto.slice(), ttd:padTtd.kosong()?'':padTtd.ambil()
     };
     btn.disabled=true; btn.textContent=payload.foto.length?'Mengunggah foto & menyimpan…':'Menyimpan…';
     Promise.all(payload.foto.map(buatThumb)).then(function(t){payload.thumb=t.filter(Boolean);return call('simpanObservasi',S.token,payload);}).then(function(r){
@@ -3598,7 +3597,7 @@ function htmlLampiranTtd(list,tanpaRuang){
   if(!list)return PESAN_SERVER_LAMA;
   if(!list.length)return '<div class="desc">Belum ada observasi pada bulan ini.</div>';
   var ada=list.filter(function(o){return o.ttd;}).length;
-  return '<div class="small mb">'+list.length+' petugas diobservasi · <b>'+ada+'</b> bertanda tangan'+(ada<list.length?' · '+(list.length-ada)+' tanpa tanda tangan (diinput sebelum fitur tanda tangan ada)':'')+'</div>'+
+  return '<div class="small mb">'+list.length+' petugas diobservasi · <b>'+ada+'</b> bertanda tangan'+(ada<list.length?' · '+(list.length-ada)+' tanpa tanda tangan':'')+'</div>'+
     '<div class="table-scroll"><table class="lp-tabel lp-ttd"><thead><tr><th>No</th><th>Tanggal</th>'+(tanpaRuang?'':'<th>Ruang</th>')+'<th>Nama Petugas</th><th>Profesi</th><th>Hasil</th><th>Tanda Tangan</th></tr></thead><tbody>'+
     list.map(function(o,i){
       return '<tr><td>'+(i+1)+'</td><td>'+esc(fmtID(o.tanggal))+'</td>'+(tanpaRuang?'':'<td class="left">'+esc(o.ruangan)+'</td>')+'<td class="left"><b>'+esc(o.nama_petugas)+'</b></td>'+
