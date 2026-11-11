@@ -559,6 +559,11 @@
   .ttd-pad.terisi .ttd-hint{display:none}
   .ttd-pad.belum{border-color:var(--danger,#c0392b);background:#fff6f5}
   .otb-ttd img{height:38px;max-width:110px;object-fit:contain;cursor:zoom-in;background:#fff;border:1px solid #e3e9ee;border-radius:4px}
+  .sup-teks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px}
+  @media(max-width:700px){.sup-teks{grid-template-columns:1fr}}
+  .sup-tbl td{vertical-align:top}
+  .sup-tbl .sup-isi{min-width:150px;max-width:240px;white-space:normal}
+  .sup-foto img{width:46px;height:46px;object-fit:cover;border-radius:4px;cursor:zoom-in;border:1px solid #e3e9ee}
   .lp-ttd td{vertical-align:middle}
   .lp-ttd-sel img{height:40px;max-width:130px;object-fit:contain;cursor:zoom-in;display:block;margin:0 auto}
   .otb-foto{display:flex;gap:4px;flex-wrap:nowrap}
@@ -619,7 +624,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.11.4';
+var VERSI_TAMPILAN='2026.11.11.5';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -822,6 +827,7 @@ function menuFor(role){
     {id:'surveiHH',t:'Survei HH',ic:'clipboard'},
     {id:'surveiAPD',t:'Survei APD',ic:'clipboard'},
     {id:'bundle',t:'Bundle HAIs',ic:'survey'},
+    {id:'supervisi',t:'Form Supervisi',ic:'clipboard'},
     {id:'rekap',t:'Rekap & Laporan',ic:'report'},
     {id:'pasien',t:'Rekap Data Pasien',ic:'users'},
     {id:'survei',t:'Kelola Survei',ic:'survey'}
@@ -929,12 +935,13 @@ function renderApp(){
 }
 function go(view){
   if(view==='laporan'){S._tabRekap='laporan';view='rekap';}   // menu lama "Laporan Bulanan" kini tab di Rekap & Laporan
-  if(view==='cek'&&S.user&&S.user.role!=='ADMIN')view='dashboard';   // Cek Sistem khusus Admin IT
+  if(view==='cek'&&S.user&&S.user.role!=='ADMIN')view='dashboard';
+  if(view==='supervisi'&&S.user&&S.user.role!=='KOMITE')view='dashboard';   // Cek Sistem khusus Admin IT
   S.view=view; tutupMenu();
   $all('#nav a[data-v]').forEach(function(a){a.classList.toggle('on',a.getAttribute('data-v')===view);});
   var titles={dashboard:'Beranda',input:'Input Harian',harian:'Survei Harian',rekap:S.user.role==='PERAWAT'?'Rekap Ruangan':'Rekap & Laporan',
     laporan:'Laporan Bulanan',survei:'Kelola Survei',obat:'Master Obat',users:'Pengguna',ruangan:'Ruangan',audit:'Audit Log',
-    surveiHH:'Survei HH',surveiAPD:'Survei APD',pasien:'Rekap Data Pasien',bundle:'Bundle HAIs',cek:'Cek Sistem'};
+    surveiHH:'Survei HH',surveiAPD:'Survei APD',pasien:'Rekap Data Pasien',bundle:'Bundle HAIs',cek:'Cek Sistem',supervisi:'Form Supervisi'};
   $('#ttl').textContent=titles[view]||'';
   $('#crumb').textContent=(titles[view]||'').toUpperCase();
   var c=$('#content'); c.innerHTML='<div class="spinner"></div>';
@@ -945,8 +952,150 @@ function go(view){
     surveiAPD:function(c){viewInputObservasi(c,'APD','Survei APD');},
     pasien:function(c){viewEmbed(c,'pasien','Rekap Data Pasien');},
     bundle:function(c){viewEmbed(c,'bundle','Bundle HAIs');},
+    supervisi:viewSupervisi,
     cek:viewCekSistem
    }[view]||viewDashboard)(c);
+}
+
+/* ================= FORM SUPERVISI (Komite PPI) ================= */
+var SUP={edit:null,foto:[],bln:null,ruang:'',list:[],ruangan:[]};
+function viewSupervisi(c){
+  SUP.edit=null; SUP.foto=[];
+  call('getDaftarRuangan',S.token).then(function(rg){
+    SUP.ruangan=(rg||[]).filter(function(r){return r.status!=='NONAKTIF';});
+    c.innerHTML='<div class="card card-pad mb" id="supFormCard"></div><div id="supDaftar"></div>';
+    gambarFormSup(); muatSupervisi();
+  }).catch(function(e){c.innerHTML='<div class="empty"><h3>Gagal memuat</h3><p>'+esc((e&&e.message)||e)+'</p></div>';});
+}
+function gambarFormSup(){
+  var d=SUP.edit||{}, el=$('#supFormCard'); SUP.foto=[];
+  var ta=function(id,label,ph,val,wajib){return '<div class="field"><label>'+label+(wajib?' <span style="color:var(--danger)">*</span>':'')+'</label><textarea id="'+id+'" rows="2" placeholder="'+ph+'">'+esc(val||'')+'</textarea></div>';};
+  el.innerHTML='<div class="flex between wrap mb" style="gap:8px"><h3>'+(SUP.edit?'Ubah Supervisi — '+esc(d.nama_petugas):'Form Supervisi')+'</h3>'+
+      (SUP.edit?'<button class="btn ghost sm" id="supBatal">Batal ubah</button>':'')+'</div>'+
+    '<div class="desc mb">Catat hasil supervisi IPCN ke ruangan. Kolom bertanda <span style="color:var(--danger)">*</span> wajib diisi; evaluasi dapat dilengkapi kemudian lewat tombol <b>Ubah</b>.</div>'+
+    '<div class="row obs-identitas">'+
+      '<div><label>Tanggal <span style="color:var(--danger)">*</span></label><input type="date" id="supTgl" value="'+esc(d.tanggal||todayISO())+'" max="'+todayISO()+'"></div>'+
+      '<div><label>Ruang <span style="color:var(--danger)">*</span></label><select id="supRuang"><option value="">Pilih ruang…</option>'+SUP.ruangan.map(function(r){return '<option value="'+r.ruangan_id+'"'+(d.ruangan_id===r.ruangan_id?' selected':'')+'>'+esc(r.nama)+'</option>';}).join('')+'</select></div>'+
+      '<div><label>IPCN <span style="color:var(--danger)">*</span></label><input id="supIpcn" placeholder="Nama IPCN" autocomplete="name" value="'+esc(d.ipcn||_ingatNama('sippi_nama_observer'))+'"></div>'+
+      '<div><label>Nama petugas <span style="color:var(--danger)">*</span></label><input id="supPetugas" placeholder="Petugas yang disupervisi" value="'+esc(d.nama_petugas||'')+'"></div>'+
+    '</div>'+
+    '<div class="sup-teks">'+
+      ta('supMasalah','Masalah','Masalah yang ditemukan…',d.masalah,true)+ta('supPenyebab','Penyebab','Penyebab masalah…',d.penyebab)+
+      ta('supTL','Tindak lanjut','Tindak lanjut yang dilakukan…',d.tindak_lanjut)+ta('supEvaluasi','Evaluasi','Hasil evaluasi tindak lanjut…',d.evaluasi)+
+    '</div>'+
+    '<div class="field mt"><label>Foto temuan <span class="small muted">(opsional, maksimal '+MAKS_FOTO+' — menjadi Temuan 1–'+MAKS_FOTO+')</span></label>'+
+      (SUP.edit&&d.jumlah_foto?'<div class="small muted mb">Sudah ada '+d.jumlah_foto+' foto. Foto baru ditambahkan sebagai temuan berikutnya.</div>':'')+
+      '<div class="foto-aksi"><button type="button" class="btn ghost sm foto-btn" id="supKameraBtn">'+IKON_KAMERA+' Ambil foto</button>'+
+        '<input type="file" accept="image/*" capture="environment" id="supKamera" hidden>'+
+        '<label class="btn ghost sm foto-btn">'+IKON_GALERI+' Pilih dari galeri<input type="file" accept="image/*" multiple id="supGaleri" hidden></label></div>'+
+      '<div class="foto-grid" id="supFotoGrid"></div></div>'+
+    '<div class="field mt"><label>Tanda tangan petugas (opsional)'+(SUP.edit&&d.ttd?' — <span class="small muted">sudah ada; tanda tangan baru akan menggantikan</span>':'')+'</label>'+
+      '<div class="ttd-pad" id="supTtdWrap"><canvas id="supTtd" aria-label="Kotak tanda tangan"></canvas><div class="ttd-garis"></div><div class="ttd-hint">Petugas tanda tangan di sini (pakai jari / stylus)</div></div>'+
+      '<div class="flex between mt" style="gap:8px;align-items:center"><span class="small muted">Tanda tangan petugas yang disupervisi.</span><button type="button" class="btn ghost sm" id="supTtdUlang">Ulangi</button></div></div>'+
+    '<button class="btn block mt" id="supSimpan" style="width:100%">'+(SUP.edit?'Simpan perubahan':'Simpan supervisi')+'</button>';
+  var maks=function(){return MAKS_FOTO-(SUP.edit?(SUP.edit.jumlah_foto||0):0);};
+  function gambarFotoSup(){
+    $('#supFotoGrid').innerHTML=SUP.foto.map(function(f,i){return '<div class="foto-item"><img src="'+f+'" alt="Foto '+(i+1)+'"><button type="button" data-i="'+i+'" title="Hapus foto">&times;</button></div>';}).join('')+
+      (SUP.foto.length?'':'<div class="foto-kosong">Belum ada foto</div>');
+    $all('#supFotoGrid button').forEach(function(b){b.onclick=function(){SUP.foto.splice(+b.dataset.i,1);gambarFotoSup();};});
+    $all('#supFormCard .foto-btn').forEach(function(l){l.classList.toggle('mati',SUP.foto.length>=maks());});
+  }
+  function tambah(inp){var files=[].slice.call(inp.files||[]);inp.value='';var sisa=maks()-SUP.foto.length;
+    if(files.length>sisa)toast('Maksimal '+MAKS_FOTO+' foto temuan.','err');
+    files.slice(0,Math.max(0,sisa)).reduce(function(p,f){return p.then(function(){return kecilkanFoto(f).then(function(x){SUP.foto.push(x);gambarFotoSup();});});},Promise.resolve())
+      .catch(function(){toast('Foto tidak bisa dibaca. Coba ambil ulang.','err');});}
+  $('#supKamera').onchange=function(){tambah(this);}; $('#supGaleri').onchange=function(){tambah(this);};
+  $('#supKameraBtn').onclick=function(){
+    if(SUP.foto.length>=maks()){toast('Maksimal '+MAKS_FOTO+' foto temuan.','err');return;}
+    if(!MODE_APPS_SCRIPT&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)
+      bukaKamera(function(x){SUP.foto.push(x);gambarFotoSup();},function(){return maks()-SUP.foto.length;},function(){$('#supKamera').click();});
+    else $('#supKamera').click();
+  };
+  gambarFotoSup();
+  var pad=PadTtd($('#supTtd')); $('#supTtdUlang').onclick=function(){pad.hapus();};
+  if($('#supBatal'))$('#supBatal').onclick=function(){SUP.edit=null;gambarFormSup();};
+  $('#supSimpan').onclick=function(){
+    var btn=this, cek=[['supTgl','Tanggal'],['supRuang','Ruang'],['supIpcn','Nama IPCN'],['supPetugas','Nama petugas'],['supMasalah','Masalah']];
+    for(var i=0;i<cek.length;i++){if(!$('#'+cek[i][0]).value.trim()){toast(cek[i][1]+' wajib diisi.','err');$('#'+cek[i][0]).focus();return;}}
+    _simpanNama('sippi_nama_observer',$('#supIpcn').value.trim());
+    var payload={supervisi_id:SUP.edit?SUP.edit.supervisi_id:'',tanggal:$('#supTgl').value,ruangan_id:$('#supRuang').value,ipcn:$('#supIpcn').value.trim(),
+      nama_petugas:$('#supPetugas').value.trim(),masalah:$('#supMasalah').value.trim(),penyebab:$('#supPenyebab').value.trim(),
+      tindak_lanjut:$('#supTL').value.trim(),evaluasi:$('#supEvaluasi').value.trim(),foto:SUP.foto.slice(),ttd:pad.kosong()?'':pad.ambil()};
+    btn.disabled=true; btn.textContent=payload.foto.length?'Mengunggah foto & menyimpan…':'Menyimpan…';
+    Promise.all(payload.foto.map(buatThumb)).then(function(t){payload.thumb=t.filter(Boolean);return call('simpanSupervisi',S.token,payload);}).then(function(r){
+      if(r&&r.ok){toast('Supervisi '+payload.nama_petugas+' tersimpan ✓','ok');SUP.bln=payload.tanggal.slice(0,7);SUP.edit=null;gambarFormSup();muatSupervisi();window.scrollTo(0,0);}
+      else{btn.disabled=false;btn.textContent=SUP.edit?'Simpan perubahan':'Simpan supervisi';toast((r&&r.pesan)||'Gagal menyimpan.','err');}
+    }).catch(function(e){btn.disabled=false;btn.textContent=SUP.edit?'Simpan perubahan':'Simpan supervisi';toast('Gagal: '+((e&&e.message)||e),'err');});
+  };
+}
+function muatSupervisi(){
+  var el=$('#supDaftar'); if(!el)return;
+  var bln=SUP.bln||todayISO().slice(0,7), bt=bln.split('-'), namaBln=BULAN_ID[Number(bt[1])-1]+' '+bt[0];
+  el.innerHTML='<div class="card card-pad"><div class="spinner"></div></div>';
+  call('getSupervisiBulan',S.token,bln,'').then(function(h){
+    if(!h||!h.ok){el.innerHTML='<div class="card card-pad">'+((h&&h.pesan)?esc(h.pesan):PESAN_SERVER_LAMA)+'</div>';return;}
+    SUP.list=h.list;
+    var ruangAda=[];h.list.forEach(function(o){if(ruangAda.indexOf(o.ruangan)<0)ruangAda.push(o.ruangan);});ruangAda.sort();
+    var fR=ruangAda.indexOf(SUP.ruang)>=0?SUP.ruang:'', list=fR?h.list.filter(function(o){return o.ruangan===fR;}):h.list;
+    var ttl='<div class="flex between wrap mb" style="gap:8px"><h3>Laporan Supervisi '+esc(namaBln)+' — '+(fR?esc(fR):'semua ruangan')+' ('+list.length+')</h3>'+
+      '<div class="flex wrap" style="gap:8px;align-items:center"><input type="month" id="supBln" value="'+bln+'" max="'+todayISO().slice(0,7)+'" style="width:auto">'+
+      (ruangAda.length>1?'<select id="supFRuang" style="width:auto"><option value="">Semua ruangan</option>'+ruangAda.map(function(r){return '<option'+(r===fR?' selected':'')+'>'+esc(r)+'</option>';}).join('')+'</select>':'')+
+      '<button class="btn ghost sm" id="supMuat">Muat ulang</button><button class="btn sm" id="supPdf"'+(list.length?'':' disabled')+'>Unduh PDF</button></div></div>';
+    var sel=function(t){return t?esc(t).replace(/\n/g,'<br>'):'<span class="muted">-</span>';};
+    var tabel=!list.length?'<div class="empty"><h3>Belum ada supervisi</h3><p>Pada bulan '+esc(namaBln)+'.</p></div>':
+      '<div class="table-scroll"><table class="otb sup-tbl"><thead><tr><th>Tanggal</th><th>IPCN</th><th>Ruang</th><th>Nama Petugas</th><th>Masalah</th><th>Penyebab</th><th>Tindak Lanjut</th><th>Evaluasi</th><th class="otb-c">Tanda Tangan</th>'+
+        [1,2,3,4,5].map(function(i){return '<th class="otb-c">Temuan '+i+'</th>';}).join('')+'<th class="otb-c">Aksi</th></tr></thead><tbody>'+
+      list.map(function(o){
+        var th=o.thumb||[];
+        return '<tr><td style="white-space:nowrap">'+esc(fmtID(o.tanggal))+'</td><td>'+esc(o.ipcn)+'</td><td>'+esc(o.ruangan)+'</td><td><b>'+esc(o.nama_petugas)+'</b></td>'+
+          '<td class="sup-isi">'+sel(o.masalah)+'</td><td class="sup-isi">'+sel(o.penyebab)+'</td><td class="sup-isi">'+sel(o.tindak_lanjut)+'</td><td class="sup-isi">'+sel(o.evaluasi)+'</td>'+
+          '<td class="otb-c otb-ttd">'+(o.ttd?'<img src="'+o.ttd+'" alt="Tanda tangan" data-nama="'+esc(o.nama_petugas)+'" onclick="lihatTtdEdukasi(this.src,this.dataset.nama)">':'<span class="muted">-</span>')+'</td>'+
+          [0,1,2,3,4].map(function(i){return '<td class="otb-c sup-foto">'+(th[i]?'<img src="'+th[i]+'" alt="Temuan '+(i+1)+'" onclick="lihatFotoObs(\''+o.supervisi_id+'\')">':(i<o.jumlah_foto?'<button class="btn ghost sm" onclick="lihatFotoObs(\''+o.supervisi_id+'\')">Lihat</button>':'<span class="muted">-</span>'))+'</td>';}).join('')+
+          '<td class="otb-c" style="white-space:nowrap"><button class="btn ghost sm" onclick="ubahSupervisi(\''+o.supervisi_id+'\')">Ubah</button> <button class="btn ghost sm" onclick="hapusSupervisiUI(\''+o.supervisi_id+'\')">Hapus</button></td></tr>';
+      }).join('')+'</tbody></table></div><div class="small muted mt">Ketuk foto / tanda tangan untuk memperbesar.</div>';
+    el.innerHTML='<div class="card card-pad">'+ttl+tabel+'</div>';
+    $('#supBln').onchange=function(){if(this.value){SUP.bln=this.value;muatSupervisi();}};
+    if($('#supFRuang'))$('#supFRuang').onchange=function(){SUP.ruang=this.value;muatSupervisi();};
+    $('#supMuat').onclick=muatSupervisi;
+    $('#supPdf').onclick=function(){pdfSupervisi(list,namaBln,fR);};
+  }).catch(function(e){el.innerHTML='<div class="card card-pad">Gagal memuat: '+esc((e&&e.message)||e)+'</div>';});
+}
+function ubahSupervisi(id){
+  var o=SUP.list.filter(function(x){return x.supervisi_id===id;})[0]; if(!o)return;
+  SUP.edit=o; gambarFormSup(); $('#supFormCard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function hapusSupervisiUI(id){
+  var o=SUP.list.filter(function(x){return x.supervisi_id===id;})[0]||{};
+  if(!confirm('Hapus data supervisi '+(o.nama_petugas||'')+' ('+fmtID(o.tanggal||'')+')? Foto temuan dan tanda tangannya ikut terhapus dari daftar.'))return;
+  call('hapusSupervisi',S.token,id).then(function(r){
+    if(r&&r.ok){toast('Data supervisi dihapus ✓','ok');if(SUP.edit&&SUP.edit.supervisi_id===id){SUP.edit=null;gambarFormSup();}muatSupervisi();}
+    else toast((r&&r.pesan)||'Gagal menghapus.','err');
+  });
+}
+/* PDF mengikuti format "LAPORAN SUPERVISI KOMITE PPI RSUD AJI MUHAMMAD IDRIS" (A4 mendatar). */
+function pdfSupervisi(list,namaBln,ruang){
+  toast('Menyusun PDF…');
+  muatPdfLib().then(function(){
+    var k=function(t,o){return Object.assign({text:t||'',fontSize:7},o||{});};
+    var gambar=function(src,w,h){return src?{image:src,fit:[w,h],alignment:'center'}:k('-',{alignment:'center',color:'#999'});};
+    var kepala=['TANGGAL','IPCN','RUANG','NAMA PETUGAS','MASALAH','PENYEBAB','TINDAK LANJUT','EVALUASI','TANDA TANGAN','TEMUAN 1','TEMUAN 2','TEMUAN 3','TEMUAN 4','TEMUAN 5']
+      .map(function(t){return k(t,{bold:true,alignment:'center',fontSize:6.5,margin:[0,3,0,3]});});
+    var baris=list.map(function(o){var th=o.thumb||[];
+      return [k(fmtID(o.tanggal)),k(o.ipcn),k(o.ruangan),k(o.nama_petugas,{bold:true}),k(o.masalah),k(o.penyebab),k(o.tindak_lanjut),k(o.evaluasi),gambar(o.ttd,48,26)]
+        .concat([0,1,2,3,4].map(function(i){return th[i]?gambar(th[i],40,40):(i<o.jumlah_foto?k('(foto)',{alignment:'center',color:'#777'}):k('-',{alignment:'center',color:'#999'}));}));});
+    var lebar=842-48;
+    var dd={pageSize:'A4',pageOrientation:'landscape',pageMargins:[24,24,24,30],defaultStyle:{fontSize:7,lineHeight:1.1},
+      content:[
+        {table:{widths:['*'],body:[[{text:'LAPORAN SUPERVISI\nKOMITE PPI RSUD AJI MUHAMMAD IDRIS',bold:true,fontSize:14,alignment:'center',fillColor:'#FFFF00',margin:[0,5,0,5]}]]},layout:{hLineWidth:function(){return 0.8;},vLineWidth:function(){return 0.8;}}},
+        {columns:[{text:'BULAN :',width:46,fontSize:7.5,bold:true},{text:namaBln+(ruang?'  ·  RUANG : '+ruang:''),fontSize:7.5,fillColor:'#E7E9EF'}],margin:[0,8,0,8]},
+        {table:{headerRows:1,dontBreakRows:true,widths:[38,44,42,50,'*',62,70,58,52,42,42,42,42,42],body:[kepala].concat(baris)},
+          layout:{hLineWidth:function(){return 0.6;},vLineWidth:function(){return 0.6;},paddingLeft:function(){return 3;},paddingRight:function(){return 3;},paddingTop:function(){return 3;},paddingBottom:function(){return 3;}}}
+      ],
+      footer:function(cur,total){return {columns:[{text:'Dicetak dari SIPPI AMI · '+tglPanjangID(todayISO())+' · '+S.user.nama,fontSize:6.5,color:'#666'},{text:'Halaman '+cur+' dari '+total,fontSize:6.5,color:'#666',alignment:'right'}],margin:[24,8,24,0]};},
+      info:{title:'Laporan Supervisi '+namaBln,author:'SIPPI AMI — RSUD Aji Muhammad Idris'}};
+    var nama=('Laporan Supervisi Komite PPI '+namaBln+(ruang?' - '+ruang:'')).replace(/[\\\/:*?"<>|]+/g,'-')+'.pdf';
+    pdfMake.createPdf(dd).getBase64(function(b64){unduhBase64(b64,nama);toast('PDF diunduh ✓','ok');});
+  }).catch(function(e){toast('Gagal membuat PDF: '+((e&&e.message)||e),'err');});
 }
 
 /* ================= NOTIFIKASI ================= */
