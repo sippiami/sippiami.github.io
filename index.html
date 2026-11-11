@@ -619,7 +619,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.11.2';
+var VERSI_TAMPILAN='2026.11.11.3';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -1351,7 +1351,9 @@ function loadForm(){
       seksi('Data Surveilans (Tindakan)','Isi manual jumlah tindakan hari ini. Angka ini menjadi penyebut perhitungan rate.',tindakan)+
       seksi('Kejadian HAIs','Bila ada kejadian (lebih dari 0), data pasien wajib dilengkapi sebanyak jumlah kejadian.',kejadian)+
       seksi('Antibiotik & Keterangan','Bagian ini opsional — seluruhnya boleh dikosongkan.',lain)+
-      '<div class="card card-pad"><div class="flex wrap">'+
+      '<div class="card card-pad"><div class="field mb" style="max-width:420px"><label>Nama petugas yang menginput <span style="color:var(--danger)">*</span></label>'+
+        '<input id="fPenginput" placeholder="Nama Anda" autocomplete="name" value="'+esc(data.nama_penginput||_ingatNama('sippi_nama_penginput'))+'"></div>'+
+        '<div class="flex wrap">'+
         '<button class="btn" id="btnSimpan">'+(modeEdit?'Simpan perubahan':'Simpan data')+'</button>'+
         '<span class="small muted">Data tidak dapat disimpan bila masih ada isian kosong.</span>'+
       '</div></div>';
@@ -1393,7 +1395,7 @@ function kunciHTML(s,tgl,data){
       'buka <b>Rekap Ruangan</b> lalu gunakan tombol <b>Edit</b> / <b>Hapus</b> pada baris tanggal tersebut.</span>'+
     '</div>'+
     '<div class="mt mb">'+(isi||'<span class="small muted">(tidak ada nilai)</span>')+'</div>'+
-    '<div class="t small muted mb">Terakhir diubah: '+esc(data.updated_by||'-')+'</div>'+
+    '<div class="t small muted mb">Diinput oleh: <b>'+esc(data.nama_penginput||data.updated_by||'-')+'</b>'+(data.nama_penginput&&data.updated_by?' · akun '+esc(data.updated_by):'')+'</div>'+
     '<button class="btn" onclick="go(\'rekap\')">Buka Rekap Ruangan</button>'+
   '</div>';
 }
@@ -1583,7 +1585,10 @@ function simpanForm(s,tgl){
     return;
   }
 
-  var payload={survei_id:s.survei_id,ruangan_id:S.user.ruangan_id,tanggal:tgl,nilai:nilai,pasien:pasien};
+  var penginput=$('#fPenginput')?$('#fPenginput').value.trim():'';
+  if(!penginput){toast('Nama petugas yang menginput wajib diisi.','err');$('#fPenginput').focus();return;}
+  _simpanNama('sippi_nama_penginput',penginput);
+  var payload={survei_id:s.survei_id,ruangan_id:S.user.ruangan_id,tanggal:tgl,nilai:nilai,pasien:pasien,nama_penginput:penginput};
   if(ph){payload.pasien_harian=ph.data;payload.pasien_harian_fields=ph.fids;payload.pasien_harian_aktif=true;}
   if(S._kj)payload.kejadian_terdata=true;
   var btn=$('#btnSimpan');btn.disabled=true;btn.textContent='Menyimpan…';
@@ -1661,7 +1666,7 @@ function loadHarian(){
       var st=b.flag_koreksi==='YA'
         ? '<span class="badge danger" title="'+esc(b.catatan_koreksi||'')+'">DIKOREKSI</span>'
         : '<span class="badge ok">TERISI</span>';
-      return '<tr><td><b>'+esc(b.ruangan_nama)+'</b><div class="t small muted">'+esc(b.updated_by||'')+'</div></td>'+
+      return '<tr><td><b>'+esc(b.ruangan_nama)+'</b><div class="t small muted">'+(b.nama_penginput?'Diinput: '+esc(b.nama_penginput):esc(b.updated_by||''))+'</div></td>'+
         sel+'<td class="small">'+lain+'</td><td>'+st+'</td>'+
         '<td><div class="aksi-baris"><button class="btn ghost sm" onclick="dlgKoreksiHarian(\''+b.entry_id+'\',\''+esc(b.ruangan_nama)+'\')">Minta koreksi</button></div></td></tr>';
     }).join('');
@@ -1766,7 +1771,7 @@ function loadHarianKode(){
       var st=b.flag_koreksi==='YA'
         ? '<span class="badge danger" title="'+esc(b.catatan_koreksi||'')+'">DIKOREKSI</span>'
         : '<span class="badge ok">TERISI</span>';
-      return '<tr><td><b>'+esc(b.ruangan_nama)+'</b><div class="t small muted">'+esc(b.updated_by||'')+'</div></td>'+
+      return '<tr><td><b>'+esc(b.ruangan_nama)+'</b><div class="t small muted">'+(b.nama_penginput?'Diinput: '+esc(b.nama_penginput):esc(b.updated_by||''))+'</div></td>'+
         sel+'<td class="small">'+lain+'</td><td>'+st+'</td>'+
         '<td><div class="aksi-baris"><button class="btn ghost sm" onclick="dlgKoreksiHarian(\''+b.entry_id+'\',\''+esc(b.ruangan_nama)+'\')">Minta koreksi</button></div></td></tr>';
     }).join('');
@@ -2119,6 +2124,9 @@ function drawLine(id,labels,data,nama,satuan){
 }
 
 /* ================= LAPORAN BULANAN (Komite PPI) ================= */
+/* Nama penginput/observer diingat per perangkat supaya tidak diketik ulang tiap input */
+function _ingatNama(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
+function _simpanNama(k,v){try{if(v)localStorage.setItem(k,v);}catch(e){}}
 function _survObs(kode){return /^(HH|APD|BDL_)/.test(String(kode||''));}   // survei observasi Komite (laporan bentuk Form A/B)
 function _judulObs(kode,r){
   if(kode==='APD')return 'Kepatuhan Penggunaan APD'; if(kode==='HH')return 'Kepatuhan Kebersihan Tangan';
@@ -2402,7 +2410,8 @@ function renderObsStep1(area){
       '<div class="row obs-identitas">'+
         '<div><label>Tanggal</label><input type="date" id="obsTgl" value="'+(id.tanggal||todayISO())+'" max="'+todayISO()+'"></div>'+
         '<div><label>Ruangan</label><select id="obsRuang">'+st.ruangan.map(function(r){return '<option value="'+r.ruangan_id+'"'+(id.ruangan_id===r.ruangan_id?' selected':'')+'>'+esc(r.nama)+'</option>';}).join('')+'</select></div>'+
-        '<div><label>Nama petugas</label><input id="obsNama" placeholder="Nama petugas"></div>'+
+        '<div><label>Nama observer (yang menginput)</label><input id="obsObserver" placeholder="Nama Anda" autocomplete="name" value="'+esc(_ingatNama('sippi_nama_observer'))+'"></div>'+
+        '<div><label>Nama petugas</label><input id="obsNama" placeholder="Petugas yang diobservasi"></div>'+
         '<div><label>Profesi</label><select id="obsProfesi">'+profesi.map(function(p){return '<option'+((id.profesi===p||(profLain&&p==='Lainnya'))?' selected':'')+'>'+p+'</option>';}).join('')+'</select></div>'+
         '<div id="obsProfesiLainWrap"'+(profLain?'':' style="display:none"')+'><label>Profesi lainnya</label><input id="obsProfesiLain" placeholder="Tulis profesi, mis. Perekam medis" value="'+(profLain?esc(id.profesi):'')+'"></div>'+
         kegiatanHTML+
@@ -2480,7 +2489,9 @@ function renderObsStep1(area){
   $('#obsTtd').addEventListener('pointerdown',function(){$('#obsTtdWrap').classList.remove('belum');});
   $('#obsSimpan').onclick=function(){
     var btn=this;
+    if(!$('#obsObserver').value.trim()){toast('Nama observer (yang menginput) wajib diisi.','err');$('#obsObserver').focus();return;}
     if(!$('#obsNama').value.trim()){toast('Nama petugas wajib diisi.','err');$('#obsNama').focus();return;}
+    _simpanNama('sippi_nama_observer',$('#obsObserver').value.trim());
     var belum=$all('.obs-item').filter(function(r){return st.jawaban[r.dataset.f]===undefined;});
     belum.forEach(function(r){r.classList.add('belum');});
     if(belum.length){toast(belum.length+' '+(st.kode==='HH'?'momen':'item')+' belum dinilai (pilih N/A bila tidak berlaku).','err');belum[0].scrollIntoView({behavior:'smooth',block:'center'});return;}
@@ -2493,7 +2504,7 @@ function renderObsStep1(area){
     st.identitas={tanggal:$('#obsTgl').value, ruangan_id:$('#obsRuang').value, profesi:prof, kegiatanPilih:kegPilih};
     var payload={
       survei_id:sv.survei_id, ruangan_id:st.identitas.ruangan_id, tanggal:st.identitas.tanggal,
-      nama_petugas:$('#obsNama').value.trim(), profesi:st.identitas.profesi,
+      nama_petugas:$('#obsNama').value.trim(), profesi:st.identitas.profesi, nama_observer:$('#obsObserver').value.trim(),
       kegiatan:sv.kegiatan?(kegPilih==='Lainnya'?$('#obsKegiatanLain').value.trim():kegPilih):'',
       kewaspadaan:$('#obsKewaspadaan')?$('#obsKewaspadaan').value:'',
       jawaban:jawaban, catatan:$('#obsCatatan').value.trim(), foto:st.foto.slice(), ttd:padTtd.kosong()?'':padTtd.ambil()
@@ -2528,7 +2539,7 @@ function loadObsLog(){
         '<th rowspan="2" class="otb-c">No</th><th rowspan="2" class="otb-c">Jam</th>'+(adaRuang?'<th rowspan="2">Ruang</th>':'')+'<th rowspan="2">Nama Petugas</th><th rowspan="2">Profesi</th>'+
         (st.sv.kegiatan?'<th rowspan="2">Kegiatan</th>':'')+
         '<th colspan="'+F.length+'" class="otb-c">'+(st.kode==='HH'?'Momen':'Item')+'</th>'+
-        '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(st.kode==='APD'?'Temuan':'Keterangan')+'</th><th rowspan="2">Foto</th><th rowspan="2" class="otb-c">TTD Petugas</th><th rowspan="2" class="otb-c">Aksi</th></tr>'+
+        '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(st.kode==='APD'?'Temuan':'Keterangan')+'</th><th rowspan="2">Foto</th><th rowspan="2" class="otb-c">TTD Petugas</th><th rowspan="2">Observer</th><th rowspan="2" class="otb-c">Aksi</th></tr>'+
         '<tr>'+F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
       list.map(function(o,n){
         return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td>'+(adaRuang?'<td>'+esc(o.ruangan||'-')+'</td>':'')+'<td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
@@ -2541,6 +2552,7 @@ function loadObsLog(){
               (o.thumb_kurang?Array(Math.max(0,o.jumlah_foto-(o.thumb||[]).length)).fill('<span class="ol-foto-muat"></span>').join(''):'')
             :'<span class="muted">-</span>')+'</div></td>'+
           '<td class="otb-c otb-ttd">'+(o.ttd?'<img src="'+o.ttd+'" alt="Tanda tangan" data-nama="'+esc(o.nama_petugas)+'" onclick="lihatTtdEdukasi(this.src,this.dataset.nama)">':'<span class="muted">-</span>')+'</td>'+
+          '<td>'+(o.observer_nama?esc(o.observer_nama):'<span class="muted">-</span>')+'</td>'+
           '<td class="otb-c"><button class="btn ghost sm" onclick="hapusBarisObs(\''+o.entry_id+'\')">Hapus</button></td></tr>';
       }).join('')+'</tbody></table></div>'+
       '<div class="otb-ket-bawah"><b>Keterangan:</b> ✓ = Patuh · ✗ = Tidak patuh · – = Tidak dinilai (N/A). Ketuk foto / tanda tangan untuk memperbesar.<ol>'+
