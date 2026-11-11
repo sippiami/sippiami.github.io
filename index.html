@@ -619,7 +619,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.11.3';
+var VERSI_TAMPILAN='2026.11.11.4';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -2456,7 +2456,7 @@ function renderObsStep1(area){
   }
   $all('.obs-item').forEach(function(row){$all('button',row).forEach(function(b){b.onclick=function(){pilih(row,b.dataset.v);};});});
   $('#obsSemuaYa').onclick=function(){$all('.obs-item').forEach(function(row){if(st.jawaban[row.dataset.f]===undefined)pilih(row,row.querySelector('.ya').dataset.v);});};
-  $('#obsTgl').onchange=loadObsLog;
+  $('#obsTgl').onchange=function(){S._obsLogBln=null;loadObsLog();};
   ringkas();
   function gambarFoto(){
     $('#obsFotoGrid').innerHTML=st.foto.map(function(d,i){
@@ -2519,30 +2519,39 @@ function renderObsStep1(area){
 }
 
 function loadObsLog(){
-  var st=OBS_STATE, tgl=$('#obsTgl')?$('#obsTgl').value:todayISO(), rid=$('#obsRuang')?$('#obsRuang').value:'';
+  var st=OBS_STATE, tgl=$('#obsTgl')?$('#obsTgl').value:todayISO();
+  var bln=S._obsLogBln||String(tgl||todayISO()).slice(0,7), bt=bln.split('-'), namaBln=BULAN_ID[Number(bt[1])-1]+' '+bt[0];
   var el=$('#obsLogArea'); if(!el)return; el.innerHTML='<div class="spinner"></div>';
   var satuan=st.kode==='HH'?'momen':'item';
-  // Tampilkan SEMUA ruangan pada tanggal itu, agar observasi dari perangkat/ruangan lain langsung terlihat.
-  call('getLogObservasi',S.token,st.sv.survei_id,'',tgl).then(function(list){
-    if(list&&list.length&&list[0].ruangan===undefined)return call('getLogObservasi',S.token,st.sv.survei_id,rid,tgl);  // server lama
-    return list;
-  }).then(function(list){
+  // Rekap BULANAN semua ruangan, agar observasi dari perangkat/ruangan lain langsung terlihat.
+  call('getLogObservasi',S.token,st.sv.survei_id,'',bln).then(function(list){
     var muat='<button class="btn ghost sm" onclick="loadObsLog()">Muat ulang</button>';
-    if(!list||!list.length){el.innerHTML='<div class="empty"><h3>Belum ada observasi</h3><p>Pada tanggal '+esc(fmtID(tgl))+' (semua ruangan).</p>'+muat+'</div>';return;}
+    var pilihBln='<input type="month" id="obsLogBln" value="'+bln+'" max="'+todayISO().slice(0,7)+'" style="width:auto">';
+    var ruangAda=[];(list||[]).forEach(function(o){if(o.ruangan&&ruangAda.indexOf(o.ruangan)<0)ruangAda.push(o.ruangan);});ruangAda.sort();
+    var fR=S._obsLogRuang&&ruangAda.indexOf(S._obsLogRuang)>=0?S._obsLogRuang:'';
+    var pilihRuang=ruangAda.length>1?'<select id="obsLogRuang" style="width:auto"><option value="">Semua ruangan</option>'+ruangAda.map(function(r){return '<option'+(r===fR?' selected':'')+'>'+esc(r)+'</option>';}).join('')+'</select>':'';
+    var pasang=function(){
+      $('#obsLogBln').onchange=function(){if(this.value){S._obsLogBln=this.value;loadObsLog();}};
+      if($('#obsLogRuang'))$('#obsLogRuang').onchange=function(){S._obsLogRuang=this.value;loadObsLog();};
+    };
+    var kepala=function(n){return '<div class="flex between wrap mb" style="gap:8px"><h3>Observasi '+esc(namaBln)+' — '+(fR?esc(fR):'semua ruangan')+' ('+n+')</h3>'+
+      '<div class="flex wrap" style="gap:8px;align-items:center">'+pilihBln+pilihRuang+muat+'</div></div>';};
+    if(fR)list=list.filter(function(o){return o.ruangan===fR;});
+    if(!list||!list.length){el.innerHTML='<div class="card card-pad">'+kepala(0)+'<div class="empty"><h3>Belum ada observasi</h3><p>Pada bulan '+esc(namaBln)+'.</p></div></div>';pasang();return;}
     var adaRuang=list[0].ruangan!==undefined;
     var F=st.sv.fields;
     var simbol=function(o,f){var v=(o.nilai||{})[f.field_id],neg=(f.opsi&&f.opsi[1])||'Tidak Patuh';
       if(!v)return '<td class="otb-n na" title="N/A">–</td>';
       return v===neg?'<td class="otb-n tidak" title="'+esc(v)+'">✗</td>':'<td class="otb-n ya" title="'+esc(v)+'">✓</td>';};
-    el.innerHTML='<div class="card card-pad"><div class="flex between mb"><h3>Observasi '+(tgl===todayISO()?'hari ini':esc(fmtID(tgl)))+' — semua ruangan ('+list.length+')</h3>'+muat+'</div>'+
+    el.innerHTML='<div class="card card-pad">'+kepala(list.length)+
       '<div class="table-scroll"><table class="otb"><thead><tr>'+
-        '<th rowspan="2" class="otb-c">No</th><th rowspan="2" class="otb-c">Jam</th>'+(adaRuang?'<th rowspan="2">Ruang</th>':'')+'<th rowspan="2">Nama Petugas</th><th rowspan="2">Profesi</th>'+
+        '<th rowspan="2" class="otb-c">No</th><th rowspan="2" class="otb-c">Tanggal</th><th rowspan="2" class="otb-c">Jam</th>'+(adaRuang?'<th rowspan="2">Ruang</th>':'')+'<th rowspan="2">Nama Petugas</th><th rowspan="2">Profesi</th>'+
         (st.sv.kegiatan?'<th rowspan="2">Kegiatan</th>':'')+
         '<th colspan="'+F.length+'" class="otb-c">'+(st.kode==='HH'?'Momen':'Item')+'</th>'+
         '<th rowspan="2" class="otb-c">Kepatuhan</th><th rowspan="2">'+(st.kode==='APD'?'Temuan':'Keterangan')+'</th><th rowspan="2">Foto</th><th rowspan="2" class="otb-c">TTD Petugas</th><th rowspan="2">Observer</th><th rowspan="2" class="otb-c">Aksi</th></tr>'+
         '<tr>'+F.map(function(f,i){return '<th class="otb-c otb-n" title="'+esc(f.label)+'">'+(i+1)+'</th>';}).join('')+'</tr></thead><tbody>'+
       list.map(function(o,n){
-        return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td>'+(adaRuang?'<td>'+esc(o.ruangan||'-')+'</td>':'')+'<td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
+        return '<tr><td class="otb-c">'+(n+1)+'</td><td class="otb-c" style="white-space:nowrap">'+esc(o.tanggal?fmtID(o.tanggal):'-')+'</td><td class="otb-c">'+esc(o.waktu||'-')+'</td>'+(adaRuang?'<td>'+esc(o.ruangan||'-')+'</td>':'')+'<td><b>'+esc(o.nama_petugas)+'</b></td><td>'+esc(o.profesi?normProfesi(o.profesi):'-')+'</td>'+
           (st.sv.kegiatan?'<td>'+esc(_kegTeks(o))+'</td>':'')+
           F.map(function(f){return simbol(o,f);}).join('')+
           '<td class="otb-c"><span class="otb-status '+(o.kepatuhan==='Patuh'?'ya':'tidak')+'">'+esc(o.kepatuhan)+'</span></td>'+
@@ -2557,6 +2566,7 @@ function loadObsLog(){
       }).join('')+'</tbody></table></div>'+
       '<div class="otb-ket-bawah"><b>Keterangan:</b> ✓ = Patuh · ✗ = Tidak patuh · – = Tidak dinilai (N/A). Ketuk foto / tanda tangan untuk memperbesar.<ol>'+
         F.map(function(f){return '<li>'+esc(f.label)+'</li>';}).join('')+'</ol></div></div>';
+    pasang();
     // foto lama yang belum punya gambar kecil -> buatkan dari Drive
     var kurang=list.filter(function(o){return o.thumb_kurang;}).map(function(o){return o.entry_id;});
     if(kurang.length)call('getThumbObservasi',S.token,kurang).then(function(h){
