@@ -624,7 +624,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.11.5';
+var VERSI_TAMPILAN='2026.11.15.3';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -1096,6 +1096,136 @@ function pdfSupervisi(list,namaBln,ruang){
     var nama=('Laporan Supervisi Komite PPI '+namaBln+(ruang?' - '+ruang:'')).replace(/[\\\/:*?"<>|]+/g,'-')+'.pdf';
     pdfMake.createPdf(dd).getBase64(function(b64){unduhBase64(b64,nama);toast('PDF diunduh ✓','ok');});
   }).catch(function(e){toast('Gagal membuat PDF: '+((e&&e.message)||e),'err');});
+}
+
+/* ================= EKSPOR EXCEL BULANAN (Komite & Admin) ================= */
+var EXCELJS_LIB='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+function muatExcelLib(){
+  if(window.ExcelJS)return Promise.resolve();
+  if(muatExcelLib._p)return muatExcelLib._p;
+  muatExcelLib._p=new Promise(function(ok,gagal){var s=document.createElement('script');s.src=EXCELJS_LIB;s.onload=ok;
+    s.onerror=function(){muatExcelLib._p=null;gagal(new Error('Pustaka Excel gagal dimuat. Periksa koneksi internet.'));};document.head.appendChild(s);});
+  return muatExcelLib._p;
+}
+function viewEkspor(area){
+  var bln=S._eksporBln||curPeriode();
+  area.innerHTML='<div class="card card-pad"><h3>Ekspor Data ke Excel</h3>'+
+    '<div class="desc mb">Mengunduh semua data SIPPI satu bulan dalam satu file Excel (.xlsx): Ringkasan, Surveilans HAIs, Pasien Kejadian HAIs, Pasien Tindakan Harian, HH, APD, tiap Bundle, Supervisi, serta <b>Form A &amp; B</b> setiap indikator (format Komite PMKP).</div>'+
+    '<div class="row" style="max-width:560px"><div><label>Bulan</label><input type="month" id="eksBln" value="'+bln+'" max="'+curPeriode()+'"></div>'+
+      '<div style="align-self:flex-end"><button class="btn" id="eksUnduh" style="width:100%">Unduh Excel</button></div></div>'+
+    '<label class="flex mt" style="gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="eksMedia" checked style="width:auto"> <span>Sertakan foto bukti &amp; tanda tangan <span class="small muted">(foto kecil + tautan ke foto asli di Drive; file lebih besar &amp; lebih lama)</span></span></label>'+
+    '<div class="badge warn mt" style="display:block;padding:10px 12px;white-space:normal;line-height:1.5">File berisi <b>data pasien lengkap</b> (nama &amp; No. RM) dan foto. Simpan hanya di perangkat RS, jangan dikirim lewat grup chat, dan hapus bila sudah tidak diperlukan.</div>'+
+    '<div id="eksInfo" class="small mt"></div></div>';
+  $('#eksBln').onchange=function(){S._eksporBln=this.value;};
+  $('#eksUnduh').onclick=function(){unduhEksporExcel($('#eksBln').value||curPeriode(),$('#eksMedia').checked,this);};
+}
+function unduhEksporExcel(bln,media,btn){
+  var info=$('#eksInfo'), lbl=btn.textContent; btn.disabled=true; btn.textContent='Mengambil data…'; if(info)info.textContent='';
+  var bt=bln.split('-'), namaBln=BULAN_ID[Number(bt[1])-1]+' '+bt[0], std={};
+  try{std=JSON.parse(localStorage.getItem('sippi_std_hais')||'{}')||{};}catch(e){}
+  Promise.all([call('getEksporBulan',S.token,bln,{media:media,standar:std}),muatExcelLib()]).then(function(res){
+    var d=res[0];
+    if(!d||!d.ok)throw new Error((d&&d.pesan)||'Fungsi ekspor belum ada di server. Pasang Kode.gs terbaru (Versi baru).');
+    btn.textContent='Menyusun file…';
+    return susunExcelSippi(d,namaBln,media).then(function(buf){
+      var nama='Data SIPPI AMI - '+namaBln+'.xlsx';
+      var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=nama;document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},60000);
+      toast('File Excel diunduh ✓','ok');
+      var jml=d.sheets.filter(function(s){return s.kelompok!=='ringkasan';}).map(function(s){return s.nama+': '+s.baris.length;});
+      if(info)info.innerHTML='<b>'+esc(nama)+'</b> ('+(blob.size/1048576).toFixed(1)+' MB) — '+(d.sheets.length+(d.formAB||[]).length)+' sheet, termasuk '+(d.formAB||[]).length+' Form A &amp; B. Jumlah baris: '+esc(jml.join(' · '))+'.';
+    });
+  }).catch(function(e){toast('Gagal mengekspor: '+((e&&e.message)||e),'err');if(info)info.textContent='';})
+  .then(function(){btn.disabled=false;btn.textContent=lbl;});
+}
+function susunExcelSippi(d,namaBln,media){
+  var wb=new ExcelJS.Workbook(); wb.creator='SIPPI AMI'; wb.created=new Date();
+  var dipakai={}, garis={style:'thin',color:{argb:'FF9AA6B0'}}, kotak={top:garis,left:garis,bottom:garis,right:garis};
+  var hijau={type:'pattern',pattern:'solid',fgColor:{argb:'FFE2EFDA'}};
+  var namaSheet=function(n){var b=String(n).replace(/[\[\]\:\*\?\/\\]/g,' ').replace(/\s+/g,' ').trim().slice(0,31)||'Sheet',x=b,i=2;
+    while(dipakai[x.toLowerCase()]){x=b.slice(0,28)+' '+(i++);} dipakai[x.toLowerCase()]=true; return x;};
+  var gambar=function(src){var m=String(src||'').match(/^data:image\/(png|jpeg|jpg);base64,/);if(!m)return null;
+    try{return wb.addImage({base64:src,extension:m[1]==='png'?'png':'jpeg'});}catch(e){return null;}};
+  var urlDrive=function(id){return 'https://drive.google.com/file/d/'+id+'/view';};
+  // ---------- sheet data ----------
+  d.sheets.forEach(function(sh){
+    var ws=wb.addWorksheet(namaSheet(sh.nama),{views:[{state:'frozen',ySplit:4}],pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+    var M=media&&sh.media?sh.media:null, iTtd=sh.header.indexOf('Tanda Tangan Petugas');
+    var nFoto=M?Math.min(5,M.reduce(function(a,x){return Math.max(a,x.foto.length);},0)):0;
+    var header=sh.header.slice(); for(var f=1;f<=nFoto;f++)header.push((sh.kelompok==='supervisi'?'Temuan ':'Foto ')+f);
+    var nk=header.length;
+    ws.mergeCells(1,1,1,Math.max(1,Math.min(nk,10)));
+    ws.getCell(1,1).value=sh.nama.toUpperCase()+' — '+namaBln.toUpperCase(); ws.getCell(1,1).font={bold:true,size:13};
+    ws.getCell(2,1).value='SIPPI AMI · RSUD Aji Muhammad Idris · diekspor '+d.dibuat+' oleh '+d.oleh; ws.getCell(2,1).font={italic:true,size:9,color:{argb:'FF666666'}};
+    var hr=ws.getRow(4); hr.values=header; hr.height=30;
+    hr.eachCell(function(c){c.font={bold:true};c.fill=hijau;c.border=kotak;c.alignment={vertical:'middle',horizontal:'center',wrapText:true};});
+    if(!sh.baris.length){ws.getCell(5,1).value='(tidak ada data pada bulan ini)';ws.getCell(5,1).font={italic:true,color:{argb:'FF888888'}};}
+    sh.baris.forEach(function(b,bi){
+      var r=ws.getRow(5+bi), m=M?M[bi]:null, vals=b.slice();
+      if(m&&iTtd>=0&&m.ttd)vals[iTtd]='';
+      r.values=vals;
+      for(var ci=1;ci<=nk;ci++){var c=r.getCell(ci);c.border=kotak;c.alignment={vertical:'top',wrapText:true};}
+      if(!m)return;
+      var ada=false;
+      if(iTtd>=0&&m.ttd){var g=gambar(m.ttd);if(g!==null){ws.addImage(g,{tl:{col:iTtd+0.08,row:4+bi+0.1},ext:{width:96,height:42},editAs:'oneCell'});ada=true;}}
+      for(var k=0;k<nFoto;k++){
+        var col=sh.header.length+k, c2=r.getCell(col+1);
+        if(m.foto[k]){c2.value={text:'Buka foto',hyperlink:urlDrive(m.foto[k])};c2.font={color:{argb:'FF1F5FBF'},underline:true,size:8};c2.alignment={vertical:'bottom',horizontal:'center'};}
+        if(m.thumb[k]){var g2=gambar(m.thumb[k]);if(g2!==null){ws.addImage(g2,{tl:{col:col+0.1,row:4+bi+0.06},ext:{width:62,height:62},editAs:'oneCell'});ada=true;}}
+      }
+      if(ada)r.height=66;
+    });
+    header.forEach(function(h,ci){
+      var foto=ci>=sh.header.length, mx=String(h).length;
+      sh.baris.slice(0,300).forEach(function(b){mx=Math.max(mx,String(b[ci]==null?'':b[ci]).length);});
+      ws.getColumn(ci+1).width=foto?11:(ci===iTtd&&M?16:Math.min(Math.max(mx+2,9),/Masalah|Penyebab|Tindak|Evaluasi|Catatan|Temuan|Survei \/ Indikator/.test(h)?45:30));
+    });
+    if(sh.baris.length)ws.autoFilter={from:{row:4,column:1},to:{row:4+sh.baris.length,column:nk}};
+  });
+  // ---------- Form A & B ----------
+  var ttd=_ttdINMDefault();
+  (d.formAB||[]).forEach(function(fb){
+    var ws=wb.addWorksheet(namaSheet('Form AB '+fb.singkat),{pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+    ws.columns=[{width:34},{width:24},{width:24},{width:18}];
+    var r=1, baris=function(vals,opt){var row=ws.getRow(r);row.values=vals;opt=opt||{};if(opt.merge)ws.mergeCells(r,opt.merge[0],r,opt.merge[1]);
+      row.eachCell({includeEmpty:true},function(c){c.font=Object.assign({size:10},opt.font||{});c.alignment=Object.assign({vertical:'middle',wrapText:true},opt.align||{});if(opt.border)c.border=kotak;if(opt.fill)c.fill=opt.fill;});
+      if(opt.h)row.height=opt.h; return r++;};
+    var kop=function(){
+      baris(['PEMERINTAH KABUPATEN KUTAI KARTANEGARA'],{merge:[1,4],font:{bold:true,size:11},align:{horizontal:'center'}});
+      var k=baris(['RUMAH SAKIT UMUM DAERAH AJI MUHAMMAD IDRIS'],{merge:[1,4],font:{bold:true,size:12},align:{horizontal:'center'}});
+      ws.getCell(k,1).border={bottom:{style:'medium'}}; r++;
+    };
+    var fmtC=function(v){return v===null||v===undefined?'N/A':Number(v).toFixed(2)+' '+fb.satuan;};
+    // FORM A
+    kop();
+    baris(['SENSUS HARIAN INDIKATOR MUTU'],{merge:[1,4],font:{bold:true,size:11},align:{horizontal:'center'}}); r++;
+    [['UNIT KERJA','TIM PPI'],['JUDUL INDIKATOR MUTU',fb.judul],['BULAN',fb.bulan],['TAHUN',String(fb.tahun)]].forEach(function(x){baris([x[0],': '+x[1]],{merge:[2,4]});});
+    r++;
+    baris(['RUANG',fb.kolA1,fb.kolA2,'HASIL CAPAIAN'],{border:true,fill:hijau,font:{bold:true,size:9},align:{horizontal:'center'},h:34});
+    fb.formA.forEach(function(x){baris([String(x[0]||'').toUpperCase(),x[1],x[2],x[2]?fmtC(x[3]):'N/A'],{border:true,align:{horizontal:'center'}});ws.getCell(r-1,1).alignment={horizontal:'left',vertical:'middle',wrapText:true};});
+    baris(['Jumlah',fb.total[0],fb.total[1],fb.total[1]?fmtC(fb.total[2]):'N/A'],{border:true,font:{bold:true},align:{horizontal:'center'}});
+    r++;
+    baris(['Penanggung Jawab Data','',ttd.tempat+', '+tglPanjangID(ttd.tanggal)],{merge:[3,4]});
+    baris(['','','Pengumpul Data'],{merge:[3,4]}); r+=2;
+    baris([ttd.pj_nama||'(.......................)','',ttd.pg_nama||'(.......................)'],{merge:[3,4],font:{bold:true,underline:true}});
+    baris(['NIP. '+(ttd.pj_nip||''),'','NIP. '+(ttd.pg_nip||'')],{merge:[3,4]});
+    // FORM B (halaman berikutnya)
+    r++; ws.getRow(r-1).addPageBreak();
+    kop();
+    baris(['LAPORAN BULANAN DARI UNIT KE KOMITE PMKP'],{merge:[1,4],font:{bold:true,size:11},align:{horizontal:'center'}}); r++;
+    var tinggi=function(t){var n=String(t||'').split('\n').reduce(function(a,l){return a+Math.max(1,Math.ceil(l.length/62));},0);return Math.max(18,n*13);};
+    [['NAMA UNIT','TIM PPI'],['JUDUL INDIKATOR',fb.judul],['NUMERATOR',fb.numB],['DENUMERATOR',fb.denB],['FORMULA',fb.formula],['TARGET PENCAPAIAN',fb.target],
+     ['HASIL CAPAIAN INDIKATOR MUTU',fb.hasil],['ANALISA',fb.analisa||'-'],['REKOMENDASI',fb.rekomendasi||'-']].forEach(function(x){
+      baris([x[0],x[1]],{merge:[2,4],border:true,h:tinggi(x[1]),align:{vertical:'top'}});ws.getCell(r-1,1).font={bold:true,size:10};
+    });
+    r++;
+    baris(['','',ttd.tempat+', '+tglPanjangID(ttd.tanggal)],{merge:[3,4]});
+    baris(['','','Penanggung Jawab Data'],{merge:[3,4]}); r+=2;
+    baris(['','',ttd.pj_nama||'(.......................)'],{merge:[3,4],font:{bold:true,underline:true}});
+    baris(['','','NIP. '+(ttd.pj_nip||'')],{merge:[3,4]});
+  });
+  return wb.xlsx.writeBuffer();
 }
 
 /* ================= NOTIFIKASI ================= */
@@ -1950,16 +2080,17 @@ function viewRekap(c){
         '<div><label>Ruangan</label><select id="rRuang" '+(S.user.role==='PERAWAT'?'disabled':'')+'>'+ruangan.map(function(r){return '<option value="'+r.ruangan_id+'">'+esc(r.nama)+'</option>';}).join('')+'</select></div>'+
         '<div><label>Bulan</label><input type="month" id="rBulan" value="'+curPeriode()+'"></div>'+
       '</div><div class="flex between mt" id="rTabWrap"><div class="seg" id="rTab"><button data-tab="tabel">'+(bolehLaporan?'Per Ruangan':'Rekap Bulanan')+'</button><button data-tab="tren">Tren Tahunan</button>'+
-        (bolehLaporan?'<button data-tab="laporan">Laporan RS</button>':'')+'</div>'+
+        (bolehLaporan?'<button data-tab="laporan">Laporan RS</button><button data-tab="ekspor">Ekspor Excel</button>':'')+'</div>'+
         '<span class="small muted" id="rHint"></span></div></div>'+
       '<div id="rArea"><div class="spinner"></div></div>';
     if(defRuang)$('#rRuang').value=defRuang;
-    var tab=S._tabRekap&&(S._tabRekap!=='laporan'||bolehLaporan)?S._tabRekap:'tabel';
+    var tab=S._tabRekap&&((S._tabRekap!=='laporan'&&S._tabRekap!=='ekspor')||bolehLaporan)?S._tabRekap:'tabel';
     function refresh(){
       S._tabRekap=tab;
       $all('#rTab button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-tab')===tab);});
-      var lap=tab==='laporan'; $('#rFilter').style.display=lap?'none':'';
+      var lap=tab==='laporan'||tab==='ekspor'; $('#rFilter').style.display=lap?'none':'';
       $('#rTabWrap').classList.toggle('mt',!lap);
+      if(tab==='ekspor'){ viewEkspor($('#rArea')); return; }
       if(lap){ viewLaporan($('#rArea')); return; }
       tab==='tabel'?loadRekapTabel():loadTren();
     }
