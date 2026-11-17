@@ -624,7 +624,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.16.1';
+var VERSI_TAMPILAN='2026.11.17.1';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -958,7 +958,7 @@ function go(view){
 }
 
 /* ================= FORM SUPERVISI (Komite PPI) ================= */
-var SUP={edit:null,foto:[],bln:null,ruang:'',list:[],ruangan:[]};
+var SUP={edit:null,foto:[],bln:null,ruang:'',list:[],ruangan:[],ruangLain:[]};
 function viewSupervisi(c){
   SUP.edit=null; SUP.foto=[];
   call('getDaftarRuangan',S.token).then(function(rg){
@@ -975,7 +975,11 @@ function gambarFormSup(){
     '<div class="desc mb">Catat hasil supervisi IPCN ke ruangan. Kolom bertanda <span style="color:var(--danger)">*</span> wajib diisi; evaluasi dapat dilengkapi kemudian lewat tombol <b>Ubah</b>.</div>'+
     '<div class="row obs-identitas">'+
       '<div><label>Tanggal <span style="color:var(--danger)">*</span></label><input type="date" id="supTgl" value="'+esc(d.tanggal||todayISO())+'" max="'+todayISO()+'"></div>'+
-      '<div><label>Ruang <span style="color:var(--danger)">*</span></label><select id="supRuang"><option value="">Pilih ruang…</option>'+SUP.ruangan.map(function(r){return '<option value="'+r.ruangan_id+'"'+(d.ruangan_id===r.ruangan_id?' selected':'')+'>'+esc(r.nama)+'</option>';}).join('')+'</select></div>'+
+      '<div><label>Ruang <span style="color:var(--danger)">*</span></label><select id="supRuang"><option value="">Pilih ruang…</option>'+
+        SUP.ruangan.map(function(r){return '<option value="'+r.ruangan_id+'"'+(d.ruangan_id===r.ruangan_id?' selected':'')+'>'+esc(r.nama)+'</option>';}).join('')+
+        (SUP.ruangLain.length?'<optgroup label="Ruang lain (tersimpan)">'+SUP.ruangLain.map(function(t){return '<option value="teks:'+esc(t)+'"'+(!d.ruangan_id&&d.ruang_teks===t?' selected':'')+'>'+esc(t)+'</option>';}).join('')+'</optgroup>':'')+
+        '<option value="__ketik">✎ Lainnya — ketik sendiri…</option></select>'+
+        '<input id="supRuangTeks" placeholder="Ketik nama ruang, mis. Laundry, CSSD, Gizi" maxlength="60" style="display:none;margin-top:6px"></div>'+
       '<div><label>IPCN <span style="color:var(--danger)">*</span></label><input id="supIpcn" placeholder="Nama IPCN" autocomplete="name" value="'+esc(d.ipcn||_ingatNama('sippi_nama_observer'))+'"></div>'+
       '<div><label>Nama petugas <span style="color:var(--danger)">*</span></label><input id="supPetugas" placeholder="Petugas yang disupervisi" value="'+esc(d.nama_petugas||'')+'"></div>'+
     '</div>'+
@@ -1013,17 +1017,24 @@ function gambarFormSup(){
   };
   gambarFotoSup();
   var pad=PadTtd($('#supTtd')); $('#supTtdUlang').onclick=function(){pad.hapus();};
+  $('#supRuang').onchange=function(){var k=this.value==='__ketik';$('#supRuangTeks').style.display=k?'':'none';if(k)$('#supRuangTeks').focus();};
+  if(d.supervisi_id&&!d.ruangan_id&&d.ruang_teks&&SUP.ruangLain.indexOf(d.ruang_teks)<0){$('#supRuang').value='__ketik';$('#supRuangTeks').value=d.ruang_teks;$('#supRuangTeks').style.display='';}
   if($('#supBatal'))$('#supBatal').onclick=function(){SUP.edit=null;gambarFormSup();};
   $('#supSimpan').onclick=function(){
+    var rv=$('#supRuang').value, ketik=rv==='__ketik';
+    if(ketik&&!$('#supRuangTeks').value.trim()){toast('Ketik nama ruang.','err');$('#supRuangTeks').focus();return;}
     var btn=this, cek=[['supTgl','Tanggal'],['supRuang','Ruang'],['supIpcn','Nama IPCN'],['supPetugas','Nama petugas'],['supMasalah','Masalah']];
     for(var i=0;i<cek.length;i++){if(!$('#'+cek[i][0]).value.trim()){toast(cek[i][1]+' wajib diisi.','err');$('#'+cek[i][0]).focus();return;}}
     _simpanNama('sippi_nama_observer',$('#supIpcn').value.trim());
-    var payload={supervisi_id:SUP.edit?SUP.edit.supervisi_id:'',tanggal:$('#supTgl').value,ruangan_id:$('#supRuang').value,ipcn:$('#supIpcn').value.trim(),
+    var ruangTeks=ketik?$('#supRuangTeks').value.trim():(rv.indexOf('teks:')===0?rv.slice(5):'');
+    var payload={supervisi_id:SUP.edit?SUP.edit.supervisi_id:'',tanggal:$('#supTgl').value,ruangan_id:ruangTeks?'':rv,ruang_teks:ruangTeks,ipcn:$('#supIpcn').value.trim(),
       nama_petugas:$('#supPetugas').value.trim(),masalah:$('#supMasalah').value.trim(),penyebab:$('#supPenyebab').value.trim(),
       tindak_lanjut:$('#supTL').value.trim(),evaluasi:$('#supEvaluasi').value.trim(),foto:SUP.foto.slice(),ttd:pad.kosong()?'':pad.ambil()};
     btn.disabled=true; btn.textContent=payload.foto.length?'Mengunggah foto & menyimpan…':'Menyimpan…';
     Promise.all(payload.foto.map(buatThumb)).then(function(t){payload.thumb=t.filter(Boolean);return call('simpanSupervisi',S.token,payload);}).then(function(r){
-      if(r&&r.ok){toast('Supervisi '+payload.nama_petugas+' tersimpan ✓','ok');SUP.bln=payload.tanggal.slice(0,7);SUP.edit=null;gambarFormSup();muatSupervisi();window.scrollTo(0,0);}
+      if(r&&r.ok){toast('Supervisi '+payload.nama_petugas+' tersimpan ✓','ok');SUP.bln=payload.tanggal.slice(0,7);SUP.edit=null;
+        if(ruangTeks&&!SUP.ruangan.some(function(x){return String(x.nama).toLowerCase()===ruangTeks.toLowerCase();})&&!SUP.ruangLain.some(function(x){return x.toLowerCase()===ruangTeks.toLowerCase();})){SUP.ruangLain.push(ruangTeks);SUP.ruangLain.sort();}
+        gambarFormSup();muatSupervisi();window.scrollTo(0,0);}
       else{btn.disabled=false;btn.textContent=SUP.edit?'Simpan perubahan':'Simpan supervisi';toast((r&&r.pesan)||'Gagal menyimpan.','err');}
     }).catch(function(e){btn.disabled=false;btn.textContent=SUP.edit?'Simpan perubahan':'Simpan supervisi';toast('Gagal: '+((e&&e.message)||e),'err');});
   };
@@ -1035,6 +1046,7 @@ function muatSupervisi(){
   call('getSupervisiBulan',S.token,bln,'').then(function(h){
     if(!h||!h.ok){el.innerHTML='<div class="card card-pad">'+((h&&h.pesan)?esc(h.pesan):PESAN_SERVER_LAMA)+'</div>';return;}
     SUP.list=h.list;
+    if(h.ruang_lain){var beda=JSON.stringify(h.ruang_lain)!==JSON.stringify(SUP.ruangLain);SUP.ruangLain=h.ruang_lain;if(beda&&!SUP.edit&&$('#supRuang')&&!$('#supRuang').value)gambarFormSupRuang();}
     var ruangAda=[];h.list.forEach(function(o){if(ruangAda.indexOf(o.ruangan)<0)ruangAda.push(o.ruangan);});ruangAda.sort();
     var fR=ruangAda.indexOf(SUP.ruang)>=0?SUP.ruang:'', list=fR?h.list.filter(function(o){return o.ruangan===fR;}):h.list;
     var ttl='<div class="flex between wrap mb" style="gap:8px"><h3>Laporan Supervisi '+esc(namaBln)+' — '+(fR?esc(fR):'semua ruangan')+' ('+list.length+')</h3>'+
@@ -1059,6 +1071,14 @@ function muatSupervisi(){
     $('#supMuat').onclick=muatSupervisi;
     $('#supPdf').onclick=function(){pdfSupervisi(list,namaBln,fR);};
   }).catch(function(e){el.innerHTML='<div class="card card-pad">Gagal memuat: '+esc((e&&e.message)||e)+'</div>';});
+}
+/* Perbarui pilihan ruang tanpa mengosongkan isian lain di form */
+function gambarFormSupRuang(){
+  var sel=$('#supRuang'); if(!sel)return;
+  var grup=sel.querySelector('optgroup'); if(grup)grup.remove();
+  if(SUP.ruangLain.length){var g=document.createElement('optgroup');g.label='Ruang lain (tersimpan)';
+    SUP.ruangLain.forEach(function(t){var o=document.createElement('option');o.value='teks:'+t;o.textContent=t;g.appendChild(o);});
+    sel.insertBefore(g,sel.querySelector('option[value="__ketik"]'));}
 }
 function ubahSupervisi(id){
   var o=SUP.list.filter(function(x){return x.supervisi_id===id;})[0]; if(!o)return;
