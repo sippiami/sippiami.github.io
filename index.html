@@ -624,7 +624,7 @@ var S = { token: localStorage.getItem('sippi_token') || null, user: null, view: 
    1) Dibuka dari alamat Apps Script (…/exec)  -> google.script.run seperti biasa.
    2) Dibuka dari alamat sendiri (GitHub Pages) -> fetch ke API_URL (doPost di Kode.gs).
       Cara 2 tidak terganggu masalah "Maaf, saat ini tidak dapat membuka file" di HP yang login akun Google. */
-var VERSI_TAMPILAN='2026.11.17.3';
+var VERSI_TAMPILAN='2026.11.17.4';
 /* Chart.js dimuat 'async' agar tidak menahan halaman; grafik yang diminta sebelum siap akan menunggu. */
 var _antreChart=[], _tungguChart=null;
 function buatChart(ctx,cfg){
@@ -1053,7 +1053,7 @@ function muatSupervisi(){
     var ttl='<div class="flex between wrap mb" style="gap:8px"><h3>Laporan Supervisi '+esc(namaBln)+' — '+(fR?esc(fR):'semua ruangan')+' ('+list.length+')</h3>'+
       '<div class="flex wrap" style="gap:8px;align-items:center"><input type="month" id="supBln" value="'+bln+'" max="'+todayISO().slice(0,7)+'" style="width:auto">'+
       (ruangAda.length>1?'<select id="supFRuang" style="width:auto"><option value="">Semua ruangan</option>'+ruangAda.map(function(r){return '<option'+(r===fR?' selected':'')+'>'+esc(r)+'</option>';}).join('')+'</select>':'')+
-      '<button class="btn ghost sm" id="supMuat">Muat ulang</button><button class="btn sm" id="supPdf"'+(list.length?'':' disabled')+'>Unduh PDF</button></div></div>';
+      '<button class="btn ghost sm" id="supMuat">Muat ulang</button><button class="btn sm" id="supWord"'+(list.length?'':' disabled')+'>Unduh Word</button></div></div>';
     var sel=function(t){return t?esc(t).replace(/\n/g,'<br>'):'<span class="muted">-</span>';};
     var tabel=!list.length?'<div class="empty"><h3>Belum ada supervisi</h3><p>Pada bulan '+esc(namaBln)+'.</p></div>':
       '<div class="table-scroll"><table class="otb sup-tbl"><thead><tr><th>Tanggal</th><th>IPCN</th><th>Ruang</th><th>Nama Petugas</th><th>Masalah</th><th>Penyebab</th><th>Tindak Lanjut</th><th>Evaluasi</th><th class="otb-c">Tanda Tangan</th>'+
@@ -1070,7 +1070,7 @@ function muatSupervisi(){
     $('#supBln').onchange=function(){if(this.value){SUP.bln=this.value;muatSupervisi();}};
     if($('#supFRuang'))$('#supFRuang').onchange=function(){SUP.ruang=this.value;muatSupervisi();};
     $('#supMuat').onclick=muatSupervisi;
-    $('#supPdf').onclick=function(){pdfSupervisi(list,namaBln,fR);};
+    $('#supWord').onclick=function(){wordSupervisi(list,namaBln,fR);};
   }).catch(function(e){el.innerHTML='<div class="card card-pad">Gagal memuat: '+esc((e&&e.message)||e)+'</div>';});
 }
 /* Perbarui pilihan ruang tanpa mengosongkan isian lain di form */
@@ -1093,34 +1093,107 @@ function hapusSupervisiUI(id){
     else toast((r&&r.pesan)||'Gagal menghapus.','err');
   });
 }
-/* PDF mengikuti lembar kedua "LAPORAN SUPERVISI RSUD AMI" (A4 mendatar): kop dua logo, judul dalam kotak biru logo RSUD, tabel Temuan 1–4. */
+/* Laporan Supervisi dalam Word (.docx), mengikuti lembar kedua "LAPORAN SUPERVISI RSUD AMI" (A4 mendatar):
+   kop dua logo (berulang tiap halaman), judul dalam kotak biru logo RSUD, tabel Temuan 1–4 dengan foto. */
 var BIRU_RSUD='#1172B4';
-function pdfSupervisi(list,namaBln,ruang){
-  toast('Menyusun PDF…');
-  muatPdfLib().then(function(){
-    var lebar=842-60;
-    var k=function(t,o){return Object.assign({text:t||'',fontSize:7.5},o||{});};
-    var gambar=function(src,w,h){return src?{image:src,fit:[w,h],alignment:'center'}:k('',{});};
-    var fmtTgl=function(t){var m=String(t||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[3]+'/'+m[2]+'/'+m[1]:String(t||'');};
-    var kepala=['TANGGAL','IPCN','RUANG','NAMA PETUGAS','MASALAH','PENYEBAB','TINDAK LANJUT','EVALUASI','TANDA TANGAN','TEMUAN 1','TEMUAN 2','TEMUAN 3','TEMUAN 4']
-      .map(function(t){return k(t,{bold:true,alignment:'center',fontSize:7.5,margin:[0,4,0,4]});});
-    var baris=list.map(function(o){var th=o.thumb||[];
-      return [k(fmtTgl(o.tanggal)),k(o.ipcn),k(o.ruangan),k(o.nama_petugas),k(o.masalah),k(o.penyebab),k(o.tindak_lanjut),k(o.evaluasi),gambar(o.ttd,54,28)]
-        .concat([0,1,2,3].map(function(i){return th[i]?gambar(th[i],46,60):(i<o.jumlah_foto?k('(foto di Drive)',{alignment:'center',color:'#777',fontSize:6.5}):k(''));}));});
-    var dd={pageSize:'A4',pageOrientation:'landscape',pageMargins:[30,112,30,30],defaultStyle:{fontSize:7.5,lineHeight:1.1},
-      header:function(){return {margin:[30,18,30,0],stack:kopPdf(lebar)};},
-      content:[
-        {table:{widths:['*'],body:[[{text:'LAPORAN SUPERVISI TIM PPI RSUD AJI MUHAMMAD IDRIS MUARA BADAK',bold:true,fontSize:13,color:'#FFFFFF',alignment:'center',fillColor:BIRU_RSUD,margin:[0,9,0,9]}]]},
-          layout:{hLineWidth:function(){return 0.8;},vLineWidth:function(){return 0.8;},hLineColor:function(){return '#0B4F7E';},vLineColor:function(){return '#0B4F7E';}}},
-        {text:'Bulan: '+namaBln+(ruang?'   ·   Ruang: '+ruang:''),fontSize:8.5,bold:true,margin:[0,8,0,8]},
-        {table:{headerRows:1,dontBreakRows:true,widths:[44,40,42,48,'*',56,64,48,56,48,48,48,48],body:[kepala].concat(baris)},
-          layout:{hLineWidth:function(){return 0.8;},vLineWidth:function(){return 0.8;},paddingLeft:function(){return 3;},paddingRight:function(){return 3;},paddingTop:function(){return 3;},paddingBottom:function(){return 3;}}}
-      ],
-      footer:function(cur,total){return {columns:[{text:'Dicetak dari SIPPI AMI · '+tglPanjangID(todayISO())+' · '+S.user.nama,fontSize:6.5,color:'#666'},{text:'Halaman '+cur+' dari '+total,fontSize:6.5,color:'#666',alignment:'right'}],margin:[30,8,30,0]};},
-      info:{title:'Laporan Supervisi '+namaBln,author:'SIPPI AMI — RSUD Aji Muhammad Idris'}};
-    var nama=('Laporan Supervisi Tim PPI '+namaBln+(ruang?' - '+ruang:'')).replace(/[\\\/:*?"<>|]+/g,'-')+'.pdf';
-    pdfMake.createPdf(dd).getBase64(function(b64){unduhBase64(b64,nama);toast('PDF diunduh ✓','ok');});
-  }).catch(function(e){toast('Gagal membuat PDF: '+((e&&e.message)||e),'err');});
+var DOCX_LIB='https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js';
+function muatDocxLib(){
+  if(window.docx&&window.docx.Document)return Promise.resolve();
+  if(muatDocxLib._p)return muatDocxLib._p;
+  muatDocxLib._p=new Promise(function(ok,gagal){var s=document.createElement('script');s.src=DOCX_LIB;s.onload=ok;
+    s.onerror=function(){muatDocxLib._p=null;gagal(new Error('Pustaka Word gagal dimuat. Periksa koneksi internet.'));};document.head.appendChild(s);});
+  return muatDocxLib._p;
+}
+/* data:image/... -> {data:Uint8Array, w, h} (ukuran asli untuk menjaga proporsi) */
+function _gambarDocx_(src){
+  if(!src||!/^data:image\//.test(src))return Promise.resolve(null);
+  return new Promise(function(ok){
+    var img=new Image();
+    img.onload=function(){
+      try{var b=atob(src.split(',')[1]),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);
+        ok({data:u,w:img.naturalWidth||1,h:img.naturalHeight||1});}catch(e){ok(null);}
+    };
+    img.onerror=function(){ok(null);}; img.src=src;
+  });
+}
+function wordSupervisi(list,namaBln,ruang){
+  toast('Menyusun dokumen Word…');
+  muatDocxLib().then(function(){
+    var D=window.docx, biru=BIRU_RSUD.replace('#',''), FONT='Arial';
+    var semua=[logoDataUrl('--logo-kukar'),logoDataUrl('--logo')];
+    list.forEach(function(o){semua.push(o.ttd||'');(o.thumb||[]).slice(0,4).forEach(function(t){semua.push(t);});});
+    return Promise.all(semua.map(_gambarDocx_)).then(function(g){
+      var cache={},idx=0; semua.forEach(function(s,i){if(s)cache[s]=g[i];});
+      var gb=function(src,maxW,maxH){var x=src&&cache[src];if(!x)return null;
+        var s=Math.min(maxW/x.w,maxH/x.h);return new D.ImageRun({data:x.data,transformation:{width:Math.max(1,Math.round(x.w*s)),height:Math.max(1,Math.round(x.h*s))}});};
+      var fmtTgl=function(t){var m=String(t||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[3]+'/'+m[2]+'/'+m[1]:String(t||'');};
+      var tanpa={top:{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'},bottom:{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'},left:{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'},right:{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'}};
+      var garis={style:D.BorderStyle.SINGLE,size:6,color:'000000'};
+      var semuaGaris={top:garis,bottom:garis,left:garis,right:garis,insideHorizontal:garis,insideVertical:garis};
+      var p=function(teks,o){o=o||{};
+        var baris=String(teks==null?'':teks).split(/\r?\n/), runs=[];
+        baris.forEach(function(b,i){runs.push(new D.TextRun({text:b,bold:!!o.bold,size:o.size||15,color:o.color,font:FONT,break:i?1:0}));});
+        return new D.Paragraph({alignment:o.center?D.AlignmentType.CENTER:D.AlignmentType.LEFT,spacing:{before:o.before||0,after:o.after||0,line:o.line||240},children:runs});};
+      var pGb=function(run){return new D.Paragraph({alignment:D.AlignmentType.CENTER,children:run?[run]:[]});};
+      /* ---- Kop (header berulang) ---- */
+      var LEBAR=16838-2*680;   // lebar isi A4 mendatar (twip), margin kiri/kanan 680
+      var kopTeks=[
+        p('PEMERINTAH KABUPATEN KUTAI KARTANEGARA',{bold:true,size:22,center:true}),
+        p('DINAS KESEHATAN',{bold:true,size:24,center:true}),
+        p('UNIT ORGANISASI BERSIFAT KHUSUS',{bold:true,size:24,center:true}),
+        p('RUMAH SAKIT UMUM DAERAH AJI MUHAMMAD IDRIS',{bold:true,size:26,center:true}),
+        p('Jalan Poros Muara Badak-Marangkayu, RT02 Sambera Jembatan, Desa Tanjung Limau',{size:15,center:true}),
+        new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[new D.TextRun({text:'Kecamatan Muara Badak, Kode Pos 75382, Pos-el : ',size:15,font:FONT}),new D.TextRun({text:'rsudajimuhammadidris1@gmail.com',size:15,font:FONT,color:'1155CC'})]})
+      ];
+      var sLogo=1300;
+      var kop=new D.Table({width:{size:LEBAR,type:D.WidthType.DXA},columnWidths:[sLogo,LEBAR-2*sLogo,sLogo],borders:Object.assign({},tanpa,{insideHorizontal:tanpa.top,insideVertical:tanpa.top}),
+        rows:[new D.TableRow({children:[
+          new D.TableCell({width:{size:sLogo,type:D.WidthType.DXA},verticalAlign:D.VerticalAlign.CENTER,borders:tanpa,children:[pGb(gb(semua[0],66,66))]}),
+          new D.TableCell({width:{size:LEBAR-2*sLogo,type:D.WidthType.DXA},verticalAlign:D.VerticalAlign.CENTER,borders:tanpa,children:kopTeks}),
+          new D.TableCell({width:{size:sLogo,type:D.WidthType.DXA},verticalAlign:D.VerticalAlign.CENTER,borders:tanpa,children:[pGb(gb(semua[1],66,66))]})
+        ]})]});
+      var garisKop=new D.Paragraph({spacing:{after:120},border:{bottom:{style:D.BorderStyle.THICK_THIN_SMALL_GAP,size:24,color:'000000',space:1}},children:[]});
+      /* ---- Judul dalam kotak biru ---- */
+      var garisBiru={style:D.BorderStyle.SINGLE,size:8,color:'0B4F7E'};
+      var judul=new D.Table({width:{size:LEBAR,type:D.WidthType.DXA},columnWidths:[LEBAR],borders:{top:garisBiru,bottom:garisBiru,left:garisBiru,right:garisBiru},
+        rows:[new D.TableRow({children:[new D.TableCell({width:{size:LEBAR,type:D.WidthType.DXA},shading:{type:D.ShadingType.CLEAR,fill:biru,color:'auto'},
+          margins:{top:140,bottom:140},verticalAlign:D.VerticalAlign.CENTER,
+          children:[p('LAPORAN SUPERVISI TIM PPI RSUD AJI MUHAMMAD IDRIS MUARA BADAK',{bold:true,size:26,color:'FFFFFF',center:true})]})]})]});
+      var infoBln=p('Bulan: '+namaBln+(ruang?'     Ruang: '+ruang:''),{bold:true,size:17,before:160,after:160});
+      /* ---- Tabel supervisi ---- */
+      var pt=[44,40,42,48,0,56,64,48,56,48,48,48,48], tetap=pt.reduce(function(a,b){return a+b;},0);
+      var skala=LEBAR/782; pt[4]=782-tetap;
+      var lebarKol=pt.map(function(w){return Math.round(w*skala);});
+      lebarKol[4]+=LEBAR-lebarKol.reduce(function(a,b){return a+b;},0);
+      var mar={top:50,bottom:50,left:60,right:60};
+      var sel=function(i,anak,o){o=o||{};return new D.TableCell({width:{size:lebarKol[i],type:D.WidthType.DXA},margins:mar,verticalAlign:o.tengah?D.VerticalAlign.CENTER:D.VerticalAlign.TOP,shading:o.fill?{type:D.ShadingType.CLEAR,fill:o.fill,color:'auto'}:undefined,children:anak});};
+      var judulKol=['TANGGAL','IPCN','RUANG','NAMA PETUGAS','MASALAH','PENYEBAB','TINDAK LANJUT','EVALUASI','TANDA TANGAN','TEMUAN 1','TEMUAN 2','TEMUAN 3','TEMUAN 4'];
+      var kepala=new D.TableRow({tableHeader:true,cantSplit:true,children:judulKol.map(function(t,i){return sel(i,[p(t,{bold:true,center:true})],{tengah:true});})});
+      var pxKol=function(i){return Math.floor(lebarKol[i]/15)-8;}; // twip -> px (1px = 15 twip), sisakan margin
+      var baris=list.map(function(o){var th=o.thumb||[];
+        var isi=[fmtTgl(o.tanggal),o.ipcn,o.ruangan,o.nama_petugas,o.masalah,o.penyebab,o.tindak_lanjut,o.evaluasi].map(function(t,i){return sel(i,[p(t)]);});
+        isi.push(sel(8,[pGb(gb(o.ttd,pxKol(8),40))],{tengah:true}));
+        [0,1,2,3].forEach(function(i){var r=th[i]?gb(th[i],pxKol(9+i),82):null;
+          isi.push(sel(9+i,[r?pGb(r):(i<(o.jumlah_foto||0)?p('(foto di Drive)',{center:true,size:13,color:'777777'}):p(''))],{tengah:true}));});
+        return new D.TableRow({cantSplit:true,children:isi});});
+      var tabel=new D.Table({width:{size:LEBAR,type:D.WidthType.DXA},columnWidths:lebarKol,borders:semuaGaris,rows:[kepala].concat(baris)});
+      var kaki=new D.Paragraph({children:[
+        new D.TextRun({text:'Dicetak dari SIPPI AMI · '+tglPanjangID(todayISO())+' · '+S.user.nama+'          Halaman ',size:13,color:'666666',font:FONT}),
+        new D.TextRun({children:[D.PageNumber.CURRENT],size:13,color:'666666',font:FONT}),
+        new D.TextRun({text:' dari ',size:13,color:'666666',font:FONT}),
+        new D.TextRun({children:[D.PageNumber.TOTAL_PAGES],size:13,color:'666666',font:FONT})]});
+      var doc=new D.Document({creator:'SIPPI AMI — RSUD Aji Muhammad Idris',title:'Laporan Supervisi '+namaBln,
+        styles:{default:{document:{run:{font:FONT,size:15}}}},
+        sections:[{properties:{page:{size:{orientation:D.PageOrientation.LANDSCAPE,width:11906,height:16838},margin:{top:400,bottom:600,left:680,right:680,header:360,footer:300}}},
+          headers:{default:new D.Header({children:[kop,garisKop]})},
+          footers:{default:new D.Footer({children:[kaki]})},
+          children:[judul,infoBln,tabel]}]});
+      return D.Packer.toBase64String(doc);
+    });
+  }).then(function(b64){
+    var nama=('Laporan Supervisi Tim PPI '+namaBln+(ruang?' - '+ruang:'')).replace(/[\\\/:*?"<>|]+/g,'-')+'.docx';
+    unduhBase64(b64,nama,'application/vnd.openxmlformats-officedocument.wordprocessingml.document');toast('Dokumen Word diunduh ✓','ok');
+  }).catch(function(e){toast('Gagal membuat Word: '+((e&&e.message)||e),'err');});
 }
 
 /* ================= EKSPOR EXCEL BULANAN (Komite & Admin) ================= */
@@ -3639,14 +3712,15 @@ function dialogTtd(){
   });
 }
 
-function unduhBase64(b64,nama){
+function unduhBase64(b64,nama,mime){
   var bin=atob(b64), arr=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
-  var url=URL.createObjectURL(new Blob([arr],{type:'application/pdf'}));
+  var jenis=mime&&/word/.test(mime)?'Dokumen Word':'PDF';
+  var url=URL.createObjectURL(new Blob([arr],{type:mime||'application/pdf'}));
   var a=document.createElement('a'); a.href=url; a.download=nama; document.body.appendChild(a); a.click(); a.remove();
   // iPhone/iPad (terutama dari ikon layar utama) sering mengabaikan unduhan otomatis -> sediakan tombol buka/unduh manual.
   if(/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)){
-    modal('PDF siap','<p class="small">Bila PDF belum terbuka otomatis, ketuk tombol di bawah. Di iPhone, PDF terbuka di tab baru — ketuk ikon Bagikan lalu <b>Simpan ke File</b>.</p>'+
-      '<p><a class="btn" href="'+url+'" target="_blank" download="'+esc(nama)+'">Buka / Unduh PDF</a></p>');
+    modal(jenis+' siap','<p class="small">Bila '+jenis+' belum terbuka otomatis, ketuk tombol di bawah. Di iPhone, file terbuka di tab baru — ketuk ikon Bagikan lalu <b>Simpan ke File</b>.</p>'+
+      '<p><a class="btn" href="'+url+'" target="_blank" download="'+esc(nama)+'">Buka / Unduh '+jenis+'</a></p>');
     setTimeout(function(){URL.revokeObjectURL(url);},600000);
   } else setTimeout(function(){URL.revokeObjectURL(url);},60000);
 }
